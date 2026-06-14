@@ -1,27 +1,15 @@
 --[[
-    Customizable UI Library V1.1
+    Customizable UI Library
     Original concept by esore aka vaehz - rewritten so the WHOLE design
     can be customized via module.Theme / win(title, themeOverrides) /
     window:SetTheme(...) WITHOUT having to build new UI assets.
 
-    Every visual element (window, topbar, tabs, buttons, toggles,
-    textboxes, sliders, labels) is built with Instance.new and styled
-    from a single "theme" table. Change colors, fonts, sizes, corner
-    radius etc. in one place - or override them per window, or change
-    them live at runtime.
-
     -------------------------------------------------------------------
     THEME PASS: "Minimal Cyberpunk"
-    - Obsidian black panels (#0B0B0E)
-    - Velvet blue/grey secondary surfaces (#1A1A2E)
-    - Neon amethyst accent (#A020F0) for highlights, borders, toggles
-    - White / ash-grey text
-    - 8px rounded corners everywhere
-    - Subtle glassmorphism (translucent panels + soft neon stroke glow)
-    - Fast, elegant transitions (<= 0.3s, Quint easing)
-
-    No functional/behavioral changes were made - only colors,
-    transparencies, corner radii, strokes and tween parameters.
+    Fixes:
+    - Glow-Error behoben
+    - Textbox Table-Sicherheitsnetz integriert
+    - Topbar-Icons auf Standard-ASCII umgestellt (Bloxstrap/FrostX kompatibel)
     -------------------------------------------------------------------
 ]]
 
@@ -31,43 +19,33 @@ local ts = cloneref(game:GetService("TweenService"))
 local cg = cloneref(game:GetService("CoreGui"))
 local ui = cloneref(game:GetService("UserInputService"))
 
--- =========================================================================
--- THEME  -- this is the single source of truth for the whole design.
--- Edit these values directly, or pass a table with the keys you want
--- to change into module:win(title, overrides).
--- =========================================================================
 module.Theme = {
 	Font = Enum.Font.GothamMedium,
 	FontBold = Enum.Font.GothamBold,
 
-	CornerRadius = UDim.new(0, 8), -- main window corners
-	ElementRadius = UDim.new(0, 8), -- buttons / toggles / tabs / inputs
+	CornerRadius = UDim.new(0, 8),
+	ElementRadius = UDim.new(0, 8),
 
-	-- core surfaces ------------------------------------------------------
-	Background = Color3.fromRGB(11, 11, 14), -- #0B0B0E  obsidian (main panels)
-	Topbar = Color3.fromRGB(26, 26, 46), -- #1A1A2E  velvet blue/grey
-	TabBar = Color3.fromRGB(26, 26, 46), -- #1A1A2E
-	ElementBg = Color3.fromRGB(26, 26, 46), -- #1A1A2E
-	ElementHoverBg = Color3.fromRGB(42, 33, 64), -- slightly lifted, purple-tinted hover
+	Background = Color3.fromRGB(11, 11, 14),
+	Topbar = Color3.fromRGB(26, 26, 46),
+	TabBar = Color3.fromRGB(26, 26, 46),
+	ElementBg = Color3.fromRGB(26, 26, 46),
+	ElementHoverBg = Color3.fromRGB(42, 33, 64),
 
-	-- text -----------------------------------------------------------------
-	Text = Color3.fromRGB(255, 255, 255), -- #FFFFFF
-	SubText = Color3.fromRGB(143, 143, 143), -- #8F8F8F
+	Text = Color3.fromRGB(255, 255, 255),
+	SubText = Color3.fromRGB(143, 143, 143),
 
-	-- accents ----------------------------------------------------------------
-	Accent = Color3.fromRGB(160, 32, 240), -- #A020F0  neon amethyst
-	ToggleOn = Color3.fromRGB(160, 32, 240), -- #A020F0  neon amethyst (active)
-	ToggleOff = Color3.fromRGB(50, 50, 64), -- muted slate (inactive)
+	Accent = Color3.fromRGB(160, 32, 240),
+	ToggleOn = Color3.fromRGB(160, 32, 240),
+	ToggleOff = Color3.fromRGB(50, 50, 64),
 
-	-- glassmorphism / glow ---------------------------------------------------
-	PanelTransparency = 0.30, -- topbar / tabbar glass strength
-	ElementTransparency = 0.35, -- resting glass strength for buttons etc.
-	ElementHoverTransparency = 0.08, -- glass strength on hover
-	StrokeTransparency = 1, -- hidden neon edge by default
-	StrokeHoverTransparency = 0.35, -- neon edge glow on hover/active
-	WindowStrokeTransparency = 0.45, -- always-on neon edge around the whole window
+	PanelTransparency = 0.30,
+	ElementTransparency = 0.35,
+	ElementHoverTransparency = 0.08,
+	StrokeTransparency = 1,
+	StrokeHoverTransparency = 0.35,
+	WindowStrokeTransparency = 0.45,
 
-	-- layout --------------------------------------------------------------
 	WindowSize = UDim2.new(0.37, 0, 0.42, 0),
 	WindowPosition = UDim2.new(0.315, 0, 0.29, 0),
 
@@ -76,9 +54,6 @@ module.Theme = {
 	ElementHeight = 36,
 }
 
--- =========================================================================
--- HELPERS
--- =========================================================================
 local function create(class, props)
 	local inst = Instance.new(class)
 	for k, v in pairs(props or {}) do
@@ -87,7 +62,6 @@ local function create(class, props)
 	return inst
 end
 
--- Helper to safely unpack strings from passed arguments/tables
 local function checkText(val)
 	if type(val) == "table" then
 		return tostring(val.Name or val.Text or val[1] or "Unknown")
@@ -95,13 +69,9 @@ local function checkText(val)
 	return tostring(val or "")
 end
 
--- =========================================================================
--- WINDOW
--- =========================================================================
 function module:win(title, themeOverrides)
 	title = checkText(title)
 	
-	-- merge default theme + per-window overrides (without touching module.Theme)
 	local theme = {}
 	for k, v in pairs(module.Theme) do
 		theme[k] = v
@@ -110,7 +80,6 @@ function module:win(title, themeOverrides)
 		theme[k] = v
 	end
 
-	-- registry of {instance, property, themeKey} so SetTheme can re-apply colors live
 	local registry = {}
 	local function reg(inst, prop, key)
 		inst[prop] = theme[key]
@@ -118,7 +87,6 @@ function module:win(title, themeOverrides)
 		return inst
 	end
 
-	-- screen gui ------------------------------------------------------------
 	local screenGui = create("ScreenGui", {
 		Name = "CustomUI",
 		ResetOnSpawn = false,
@@ -128,7 +96,6 @@ function module:win(title, themeOverrides)
 	local hui = gethui or get_hidden_gui or nil
 	screenGui.Parent = hui and hui() or cg
 
-	-- main frame (CanvasGroup -> whole UI can fade together) ----------------
 	local main = create("CanvasGroup", {
 		Name = "Frame",
 		Parent = screenGui,
@@ -141,7 +108,6 @@ function module:win(title, themeOverrides)
 	reg(main, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = main, CornerRadius = theme.CornerRadius })
 
-	-- always-on neon edge glow around the whole window -----------------------
 	local mainStroke = create("UIStroke", {
 		Parent = main,
 		Thickness = 1,
@@ -150,7 +116,6 @@ function module:win(title, themeOverrides)
 	})
 	reg(mainStroke, "Color", "Accent")
 
-	-- topbar ------------------------------------------------------------------
 	local topbar = create("Frame", {
 		Name = "topbar",
 		Parent = main,
@@ -161,7 +126,6 @@ function module:win(title, themeOverrides)
 	reg(topbar, "BackgroundColor3", "Topbar")
 	create("UICorner", { Parent = topbar, CornerRadius = theme.CornerRadius })
 
-	-- thin neon separator line between topbar and body -----------------------
 	local topbarLine = create("Frame", {
 		Name = "accentline",
 		Parent = topbar,
@@ -186,7 +150,6 @@ function module:win(title, themeOverrides)
 	reg(titleLbl, "TextColor3", "Text")
 	reg(titleLbl, "Font", "FontBold")
 
-	-- topbar buttons (close / minimize) - drawn as text, no images needed --
 	local btns = create("Frame", {
 		Name = "btns",
 		Parent = topbar,
@@ -218,41 +181,24 @@ function module:win(title, themeOverrides)
 		create("UICorner", { Parent = btn, CornerRadius = UDim.new(0, 6) })
 
 		btn.MouseEnter:Connect(function()
-			ts:Create(
-				btn,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ BackgroundTransparency = theme.ElementHoverTransparency }
-			):Play()
-			ts:Create(
-				btn,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ TextColor3 = theme.Accent }
-			):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { TextColor3 = theme.Accent }):Play()
 		end)
 		btn.MouseLeave:Connect(function()
-			ts:Create(
-				btn,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ BackgroundTransparency = 1 }
-			):Play()
-			ts:Create(
-				btn,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ TextColor3 = theme.SubText }
-			):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { TextColor3 = theme.SubText }):Play()
 		end)
 		return btn
 	end
 
-	local minimizeBtn = makeTopbarBtn("–")
-	local closeBtn = makeTopbarBtn("✕")
+	-- Hier sind jetzt die absolut sicheren ASCII-Zeichen drin:
+	local minimizeBtn = makeTopbarBtn("-")
+	local closeBtn = makeTopbarBtn("X")
 
-	-- open / minimize -------------------------------------------------------
 	local function setOpen(isOpen)
 		ts:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 			GroupTransparency = isOpen and 0 or 1,
-			Size = isOpen and theme.WindowSize
-				or UDim2.new(theme.WindowSize.X.Scale, theme.WindowSize.X.Offset, 0, theme.TopbarHeight),
+			Size = isOpen and theme.WindowSize or UDim2.new(theme.WindowSize.X.Scale, theme.WindowSize.X.Offset, 0, theme.TopbarHeight),
 		}):Play()
 		main.Interactable = isOpen
 	end
@@ -272,50 +218,31 @@ function module:win(title, themeOverrides)
 		screenGui:Destroy()
 	end)
 
-	-- dragging via topbar -----------------------------------------------------
 	do
 		local dragging, dragInput, mousePos, framePos
-
 		topbar.InputBegan:Connect(function(input)
-			if
-				input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch
-			then
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				dragging = true
 				mousePos = input.Position
 				framePos = main.Position
-
 				input.Changed:Connect(function()
-					if input.UserInputState == Enum.UserInputState.End then
-						dragging = false
-					end
+					if input.UserInputState == Enum.UserInputState.End then dragging = false end
 				end)
 			end
 		end)
-
 		topbar.InputChanged:Connect(function(input)
-			if
-				input.UserInputType == Enum.UserInputType.MouseMovement
-				or input.UserInputType == Enum.UserInputType.Touch
-			then
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				dragInput = input
 			end
 		end)
-
 		ui.InputChanged:Connect(function(input)
 			if input == dragInput and dragging then
 				local delta = input.Position - mousePos
-				main.Position = UDim2.new(
-					framePos.X.Scale,
-					framePos.X.Offset + delta.X,
-					framePos.Y.Scale,
-					framePos.Y.Offset + delta.Y
-				)
+				main.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
 			end
 		end)
 	end
 
-	-- body: tab bar (left) + section container (right) ----------------------
 	local body = create("Frame", {
 		Name = "body",
 		Parent = main,
@@ -337,12 +264,7 @@ function module:win(title, themeOverrides)
 	reg(tabBar, "BackgroundColor3", "TabBar")
 	reg(tabBar, "ScrollBarImageColor3", "Accent")
 	create("UIListLayout", { Parent = tabBar, Padding = UDim.new(0, 4) })
-	create("UIPadding", {
-		Parent = tabBar,
-		PaddingTop = UDim.new(0, 8),
-		PaddingLeft = UDim.new(0, 8),
-		PaddingRight = UDim.new(0, 8),
-	})
+	create("UIPadding", { Parent = tabBar, PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
 
 	local sectionsHolder = create("Frame", {
 		Name = "sectionsholder",
@@ -353,69 +275,30 @@ function module:win(title, themeOverrides)
 		ClipsDescendants = true,
 	})
 
-	-- =====================================================================
-	-- TABS / SECTIONS
-	-- =====================================================================
 	local sections = {}
 	local curBtn, curSection = nil, nil
 
 	local function setSelectedTab(btn, section)
-		if curBtn == btn then
-			return
-		end
+		if curBtn == btn then return end
 		if curBtn then
 			local curGlow = curBtn:FindFirstChild("glow")
 			local curIndicator = curBtn:FindFirstChild("indicator")
-			ts:Create(
-				curBtn,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ BackgroundTransparency = 1 }
-			):Play()
-			if curIndicator then
-				ts:Create(
-					curIndicator,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = 1 }
-				):Play()
-			end
-			if curGlow then
-				ts:Create(
-					curGlow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeTransparency }
-				):Play()
-			end
+			ts:Create(curBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
+			if curIndicator then ts:Create(curIndicator, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play() end
+			if curGlow then ts:Create(curGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end
 			curSection.Visible = false
 		end
 		
 		local glow = btn:FindFirstChild("glow")
 		local indicator = btn:FindFirstChild("indicator")
 		
-		ts:Create(
-			btn,
-			TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-			{ BackgroundTransparency = theme.ElementHoverTransparency }
-		):Play()
-		if indicator then
-			ts:Create(
-				indicator,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ BackgroundTransparency = 0 }
-			):Play()
-		end
-		if glow then
-			ts:Create(
-				glow,
-				TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				{ Transparency = theme.StrokeHoverTransparency }
-			):Play()
-		end
+		ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
+		if indicator then ts:Create(indicator, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play() end
+		if glow then ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end
 		section.Visible = true
 		curBtn, curSection = btn, section
 	end
 
-	-- icon is OPTIONAL: pass nil for a pure text tab (no asset needed),
-	-- or pass any image id/url if you want an icon.
 	function sections:tab(title, icon)
 		title = checkText(title)
 		
@@ -429,7 +312,6 @@ function module:win(title, themeOverrides)
 		reg(btn, "BackgroundColor3", "ElementBg")
 		create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
 
-		-- subtle neon edge glow, fades in when this tab is active -------------
 		local glow = create("UIStroke", {
 			Name = "glow",
 			Parent = btn,
@@ -477,34 +359,17 @@ function module:win(title, themeOverrides)
 
 		btn.MouseEnter:Connect(function()
 			if curBtn ~= btn then
-				ts:Create(
-					btn,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = theme.ElementTransparency }
-				):Play()
-				ts:Create(
-					glow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeHoverTransparency }
-				):Play()
+				ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play()
+				ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play()
 			end
 		end)
 		btn.MouseLeave:Connect(function()
 			if curBtn ~= btn then
-				ts:Create(
-					btn,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = 1 }
-				):Play()
-				ts:Create(
-					glow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeTransparency }
-				):Play()
+				ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
+				ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
 			end
 		end)
 
-		-- section content -----------------------------------------------------
 		local section = create("ScrollingFrame", {
 			Name = title,
 			Parent = sectionsHolder,
@@ -518,25 +383,11 @@ function module:win(title, themeOverrides)
 		})
 		reg(section, "ScrollBarImageColor3", "Accent")
 		create("UIListLayout", { Parent = section, Padding = UDim.new(0, 6) })
-		create("UIPadding", {
-			Parent = section,
-			PaddingTop = UDim.new(0, 10),
-			PaddingBottom = UDim.new(0, 10),
-			PaddingLeft = UDim.new(0, 10),
-			PaddingRight = UDim.new(0, 10),
-		})
+		create("UIPadding", { Parent = section, PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) })
 
-		btn.MouseButton1Click:Connect(function()
-			setSelectedTab(btn, section)
-		end)
+		btn.MouseButton1Click:Connect(function() setSelectedTab(btn, section) end)
+		if not curBtn then setSelectedTab(btn, section) end
 
-		if not curBtn then
-			setSelectedTab(btn, section)
-		end
-
-		-- =================================================================
-		-- ELEMENTS
-		-- =================================================================
 		local contents = {}
 
 		function contents:label(text)
@@ -570,7 +421,6 @@ function module:win(title, themeOverrides)
 			reg(btnEl, "Font", "Font")
 			create("UICorner", { Parent = btnEl, CornerRadius = theme.ElementRadius })
 
-			-- neon edge glow that appears on hover ---------------------------
 			local glow = create("UIStroke", {
 				Parent = btnEl,
 				Thickness = 1,
@@ -580,28 +430,12 @@ function module:win(title, themeOverrides)
 			reg(glow, "Color", "Accent")
 
 			btnEl.MouseEnter:Connect(function()
-				ts:Create(
-					btnEl,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = theme.ElementHoverTransparency }
-				):Play()
-				ts:Create(
-					glow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeHoverTransparency }
-				):Play()
+				ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
+				ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play()
 			end)
 			btnEl.MouseLeave:Connect(function()
-				ts:Create(
-					btnEl,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = theme.ElementTransparency }
-				):Play()
-				ts:Create(
-					glow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeTransparency }
-				):Play()
+				ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play()
+				ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
 			end)
 			btnEl.MouseButton1Click:Connect(cb)
 			return btnEl
@@ -609,11 +443,7 @@ function module:win(title, themeOverrides)
 
 		function contents:toggle(text, default, cb)
 			text = checkText(text)
-			if type(default) == "function" then
-				cb = default
-				default = false
-			end
-			
+			if type(default) == "function" then cb = default; default = false end
 			local toggled = default and true or false
 
 			local holder = create("TextButton", {
@@ -626,7 +456,6 @@ function module:win(title, themeOverrides)
 			reg(holder, "BackgroundColor3", "ElementBg")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
-			-- neon edge glow that appears on hover ---------------------------
 			local hoverGlow = create("UIStroke", {
 				Parent = holder,
 				Thickness = 1,
@@ -656,7 +485,6 @@ function module:win(title, themeOverrides)
 			})
 			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
 
-			-- neon glow ring around the track that intensifies when active ----
 			local trackGlow = create("UIStroke", {
 				Parent = track,
 				Thickness = 1,
@@ -681,21 +509,9 @@ function module:win(title, themeOverrides)
 				local goalPos = toggled and UDim2.new(1, -2, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
 				local goalAnchor = toggled and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
 				if animated then
-					ts:Create(
-						track,
-						TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-						{ BackgroundColor3 = goalColor }
-					):Play()
-					ts:Create(
-						trackGlow,
-						TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-						{ Transparency = goalGlow }
-					):Play()
-					ts:Create(
-						knob,
-						TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-						{ Position = goalPos }
-					):Play()
+					ts:Create(track, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundColor3 = goalColor }):Play()
+					ts:Create(trackGlow, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = goalGlow }):Play()
+					ts:Create(knob, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = goalPos }):Play()
 				else
 					track.BackgroundColor3 = goalColor
 					trackGlow.Transparency = goalGlow
@@ -706,28 +522,12 @@ function module:win(title, themeOverrides)
 			applyVisual(false)
 
 			holder.MouseEnter:Connect(function()
-				ts:Create(
-					holder,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = theme.ElementHoverTransparency }
-				):Play()
-				ts:Create(
-					hoverGlow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeHoverTransparency }
-				):Play()
+				ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
+				ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play()
 			end)
 			holder.MouseLeave:Connect(function()
-				ts:Create(
-					holder,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ BackgroundTransparency = theme.ElementTransparency }
-				):Play()
-				ts:Create(
-					hoverGlow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeTransparency }
-				):Play()
+				ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play()
+				ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
 			end)
 
 			holder.MouseButton1Click:Connect(function()
@@ -736,19 +536,13 @@ function module:win(title, themeOverrides)
 				if cb then cb(toggled) end
 			end)
 
-			if toggled and cb then
-				task.defer(cb, toggled)
-			end
-
+			if toggled and cb then task.defer(cb, toggled) end
 			return holder
 		end
 
 		function contents:textbox(text, default, cb)
 			text = checkText(text)
-			if type(default) == "function" then
-				cb = default
-				default = ""
-			end
+			if type(default) == "function" then cb = default; default = "" end
 			default = checkText(default)
 
 			local holder = create("Frame", {
@@ -780,7 +574,6 @@ function module:win(title, themeOverrides)
 			reg(inputBg, "BackgroundColor3", "ElementHoverBg")
 			create("UICorner", { Parent = inputBg, CornerRadius = UDim.new(0, 6) })
 
-			-- neon edge glow on the input field, brightens on focus -----------
 			local focusGlow = create("UIStroke", {
 				Parent = inputBg,
 				Thickness = 1,
@@ -803,26 +596,14 @@ function module:win(title, themeOverrides)
 			reg(input, "Font", "Font")
 
 			input.Focused:Connect(function()
-				ts:Create(
-					focusGlow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeHoverTransparency }
-				):Play()
+				ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play()
 			end)
 
-			if default and default ~= "" and cb then
-				task.defer(cb, default)
-			end
+			if default and default ~= "" and cb then task.defer(cb, default) end
 
 			input.FocusLost:Connect(function(enterPressed)
-				ts:Create(
-					focusGlow,
-					TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-					{ Transparency = theme.StrokeTransparency }
-				):Play()
-				if enterPressed and cb then
-					cb(input.Text)
-				end
+				ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
+				if enterPressed and cb then cb(input.Text) end
 			end)
 
 			return holder
@@ -868,7 +649,6 @@ function module:win(title, themeOverrides)
 			reg(fill, "BackgroundColor3", "Accent")
 			create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
 
-			-- soft neon glow following the fill -------------------------------
 			local fillGlow = create("UIStroke", {
 				Parent = fill,
 				Thickness = 1,
@@ -896,39 +676,22 @@ function module:win(title, themeOverrides)
 			setFromAlpha((default - min) / (max - min))
 
 			track.InputBegan:Connect(function(input)
-				if
-					input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					dragging = true
 					updateFromInput(input.Position.X)
 				end
 			end)
 
 			ui.InputChanged:Connect(function(input)
-				if
-					dragging
-					and (
-						input.UserInputType == Enum.UserInputType.MouseMovement
-						or input.UserInputType == Enum.UserInputType.Touch
-					)
-				then
+				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 					updateFromInput(input.Position.X)
 				end
 			end)
 
 			ui.InputEnded:Connect(function(input)
-				if
-					dragging
-					and (
-						input.UserInputType == Enum.UserInputType.MouseButton1
-						or input.UserInputType == Enum.UserInputType.Touch
-					)
-				then
+				if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 					dragging = false
-					if cb then
-						pcall(cb, lastVal)
-					end
+					if cb then pcall(cb, lastVal) end
 				end
 			end)
 
@@ -938,22 +701,15 @@ function module:win(title, themeOverrides)
 		return contents
 	end
 
-	-- live re-theming: change colors/fonts/sizes after the UI was built ----
 	function sections:SetTheme(overrides)
-		for k, v in pairs(overrides) do
-			theme[k] = v
-		end
+		for k, v in pairs(overrides) do theme[k] = v end
 		for _, entry in ipairs(registry) do
 			local inst, prop, key = entry[1], entry[2], entry[3]
-			if inst and inst.Parent then
-				inst[prop] = theme[key]
-			end
+			if inst and inst.Parent then inst[prop] = theme[key] end
 		end
 	end
 
-	function sections:GetTheme()
-		return theme
-	end
+	function sections:GetTheme() return theme end
 
 	return sections
 end
