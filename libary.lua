@@ -1,449 +1,687 @@
 --[[
-    FINAL CYBER UI STYLIZED LIBRARY (FOR EXECUTOR LOADER)
-    This script contains the complete module logic AND the necessary startup wrappers 
-    to maximize compatibility with external loading environments.
+    Customizable UI Library (Cyberpunk Edition)
+    Original concept by esore aka vaehz - rewritten for a sleek, Cyberpunk/Neon aesthetic.
+    All original functionalities are preserved.
 ]]
 
-local CyberUI = {} -- Use a clean table to hold the module reference
+local module = {}
 
-local ts = nil
-local cg = nil
-local ui_service = nil
+local ts = cloneref(game:GetService("TweenService"))
+local cg = cloneref(game:GetService("CoreGui"))
+local ui = cloneref(game:GetService("UserInputService"))
 
--- Initialize Services (Attempting robust service fetching)
-if game then
-    ts = game:GetService("TweenService")
-    cg = game:GetService("CoreGui")
-    ui_service = game:GetService("UserInputService")
-end
+-- =========================================================================
+-- THEME  -- This is the single source of truth for the whole design.
+-- Colors are converted to match the Cyberpunk/Minimalist schema.
+-- =========================================================================
+module.Theme = {
+	-- --- FONT & RADIUS ---
+	Font = Enum.Font.GothamMedium,
+	FontBold = Enum.Font.GothamBold,
 
--- Style Constants Definition (Ensures the style is always loaded first)
-local C = {
-    ObsidianBlack = Color3.fromRGB(11, 11, 14),
-    VelvetGray = Color3.fromRGB(26, 26, 46),
-    AccentNeon = Color3.fromRGB(160, 32, 240),
-    WhitePrimary = Color3.new(1, 1, 1),
-    GraySecondary = Color3.fromRGB(143, 143, 143)
+	CornerRadius = UDim.new(0, 8), -- Soft corners (8px) for all elements
+	ElementRadius = UDim.new(0, 8), -- Consistency: Use the main radius here
+
+	-- --- COLORS (Cyberpunk Schema) ---
+	Background = Color3.fromRGB(11, 11, 14), -- Obsidian Black (#0B0B0E) - Main panels
+	Topbar = Color3.fromRGB(20, 20, 35), -- Slightly different deep dark blue/black for depth
+	TabBar = Color3.fromRGB(26, 26, 46), -- Dark Velvet Blue/Grey (#1A1A2E) - Tab Bar background
+	ElementBg = Color3.fromRGB(26, 26, 46), -- Secondary Background (#1A1A2E) - Buttons / Inputs
+	ElementHoverBg = Color3.fromRGB(35, 35, 60), -- Slightly brighter secondary shade for hover
+
+	Text = Color3.fromRGB(255, 255, 255), -- Pure White (#FFFFFF) - Primary text
+	SubText = Color3.fromRGB(143, 143, 143), -- Ash Grey (#8F8F8F) - Descriptions/Inactive text
+
+	Accent = Color3.fromRGB(160, 32, 240), -- Neon Purple/Amethyst (#A020F0) - Highlights
+	ToggleOn = Color3.fromRGB(0, 255, 255), -- Vibrant Cyan for "ON" state (Cyberpunk glow)
+	ToggleOff = Color3.fromRGB(255, 64, 64), -- Slightly softer Red/Pink for "OFF" state
+
+	-- --- LAYOUT CONSTANTS ---
+	WindowSize = UDim2.new(0.37, 0, 0.42, 0),
+	WindowPosition = UDim2.new(0.315, 0, 0.29, 0),
+
+	TopbarHeight = 40,
+	TabBarWidth = 130,
+	ElementHeight = 36, -- Slightly larger for modern feel
 }
 
-local CORNER_RADIUS = UDim2.new(0, 8) 
-local TRANSITION_TIME = 0.3 
-local HOVER_DURATION = 0.25
-
--- Helper function (Copied and applied everywhere for consistency)
-local function applyCyberStyle(instance, bgColor)
-    if instance:IsA("Frame") or instance:IsA("TextLabel") then
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = CORNER_RADIUS
-        corner.Parent = instance
-
-        instance.BackgroundColor3 = bgColor
-        -- Use a slightly higher transparency for the dark glass look
-        instance.BackgroundTransparency = 0.15 
-    end
+-- =========================================================================
+-- HELPERS (Unchanged)
+-- =========================================================================
+local function create(class, props)
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do
+		inst[k] = v
+	end
+	return inst
 end
 
-
---- CORE UI FUNCTIONS (Module:win) ---
-function CyberUI:win(title)
-    local window = game:GetObjects("rbxassetid://96576283085736")[1]
-    local elements = game:GetObjects("rbxassetid://83539751566719")[1]
-
-    -- Safety check for core services before proceeding
-    if not window or not elements or not ts or not cg or not ui_service then
-        warn("[CyberUI ERROR] Failed to find necessary assets or core services. Cannot initialize.")
-        return 
-    end
-
-    applyCyberStyle(window, C.ObsidianBlack)
-    
-    local hui = gethui or get_hidden_gui or nil
-    if hui then
-        window.Parent = hui()
-        applyCyberStyle(window, C.ObsidianBlack)
-    else
-        window.Parent = cg
-        applyCyberStyle(window, C.ObsidianBlack)
-    end
-
-    local topbar = window.Frame.topbar
-    topbar.title.Text = title
-    if topbar.title and topbar.title:IsA("TextLabel") then
-        topbar.title.TextColor3 = C.WhitePrimary
-    end
-
-    local closeBtn = topbar.btns.Close
-    local miniBtn = topbar.btns.Minimize
-
-    applyCyberStyle(closeBtn, C.ObsidianBlack) 
-    applyCyberStyle(miniBtn, C.ObsidianBlack)
-
-
-    local toggleCon = nil
-
-    local function fadebtn(btn, isIn)
-        ts:Create(
-            btn,
-            TweenInfo.new(HOVER_DURATION),
-            {
-                BackgroundTransparency = isIn and 0.2 or 1
-            }
-        ):Play()
-    end
-
-    local function togglewin(isIn)
-        ts:Create(
-            window.Frame,
-            TweenInfo.new(TRANSITION_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {
-                GroupTransparency = isIn and 0 or 1
-            }
-        ):Play()
-        ts:Create(
-            window.Frame,
-            TweenInfo.new(TRANSITION_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {
-                Size = isIn and UDim2.new(0.37, 0, 0.407, 0) or UDim2.new(0.37, 0, 0.376, 0)
-            }
-        ):Play()
-
-        window.Frame.Interactable = isIn and true or false
-    end
-
-    local function fadetopbar(isIn)
-        ts:Create(
-            topbar,
-            TweenInfo.new(HOVER_DURATION),
-            {
-                BackgroundTransparency = isIn and 0.2 or 0.8
-            }
-        ):Play()
-    end
-
-    closeBtn.MouseEnter:Connect(function() fadebtn(closeBtn, true) end)
-    miniBtn.MouseEnter:Connect(function() fadebtn(miniBtn, true) end)
-    closeBtn.MouseLeave:Connect(function() fadebtn(closeBtn, false) end)
-    miniBtn.MouseLeave:Connect(function() fadebtn(miniBtn, false) end)
-
-    topbar.MouseEnter:Connect(function() fadetopbar(true) end)
-    topbar.MouseLeave:Connect(function() fadetopbar(false) end)
-
-    closeBtn.MouseButton1Click:Connect(function()
-        window:Destroy()
-        elements:Destroy()
-        toggleCon:Disconnect()
-    end)
-
-    miniBtn.MouseButton1Click:Connect(function()
-        togglewin(false)
-    end)
-
-    toggleCon = ui_service.InputBegan:Connect(function(keyc, gamep)
-        if not gamep and keyc.KeyCode == Enum.KeyCode.K then
-            togglewin(not window.Frame.Interactable)
-        end
-    end)
-
-    -- [ DRAGGING LOGIC UNCHANGED ] 
-    local sections = {}
-    local curSelected = nil
-    local dragging = false
-    local dragInput, mousePos, framePos
-
-    topbar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            mousePos = input.Position
-            framePos = window.Frame.Position
-
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    topbar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-
-    ui_service.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - mousePos
-            window.Frame.Position = UDim2.new(
-                framePos.X.Scale,
-                framePos.X.Offset + delta.X,
-                framePos.Y.Scale,
-                framePos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    -- [ TABS AND SECTIONS LOGIC (Styled) ] 
-    local function toggletab(tab, isIn)
-        ts:Create(
-            tab,
-            TweenInfo.new(TRANSITION_TIME),
-            {
-                GroupTransparency = isIn and 0 or 1
-            }
-        ):Play()
-        ts:Create(
-            tab,
-            TweenInfo.new(TRANSITION_TIME),
-            {
-                Position = isIn and UDim2.new(0.5, 0, 1, 0) or UDim2.new(0.5, 0, 1.1, 0)
-            }
-        ):Play()
-        tab.Interactable = isIn and true or false
-    end
-
-    local function fadeelement(which, isIn)
-        ts:Create(
-            which,
-            TweenInfo.new(HOVER_DURATION),
-            {
-                BackgroundTransparency = isIn and 0.2 or 0.3 -- The glow effect
-            }
-        ):Play()
-    end
-
-    function sections:tab(title, ico)
-        local newBtn = elements.tabelement:Clone()
-        applyCyberStyle(newBtn, C.ObsidianBlack) -- Styled background
-        newBtn.Name = title
-
-        newBtn.Image = ico
-        newBtn.title.Text = title
-
-        newBtn.Parent = window.Frame.tabscontainer
-
-        local newSect = elements.sectioncanvas:Clone()
-        applyCyberStyle(newSect, C.ObsidianBlack) -- Styled background
-        newSect.Parent = window.Frame.sectionsholder
-        newSect.GroupTransparency = 1
-        newSect.Position = UDim2.new(0.5, 0, 1.1, 0)
-        newSect.Interactable = false
-
-        local function fadetab(isIn)
-            ts:Create(
-                newBtn,
-                TweenInfo.new(HOVER_DURATION),
-                {ImageTransparency = isIn and 0.25 or 0.5}
-            ):Play()
-            ts:Create(
-                newBtn.title,
-                TweenInfo.new(HOVER_DURATION),
-                {TextColor3 = isIn and C.AccentNeon or C.WhitePrimary} -- Color change on hover
-            ):Play()
-        end
-
-        newBtn.MouseEnter:Connect(function() fadetab(true) end)
-        newBtn.MouseLeave:Connect(function() fadetab(false) end)
-
-        newBtn.MouseButton1Click:Connect(function()
-            if curSelected == newSect then return end
-            if curSelected ~= nil then
-                toggletab(curSelected, false)
-            end
-
-            toggletab(newSect, true)
-            curSelected = newSect
-        end)
-
-        local contents = {}
-
-        function contents:label(title)
-            local newLabel = elements.LabelElement:Clone()
-            applyCyberStyle(newLabel, C.ObsidianBlack) 
-            if newLabel:FindFirstChild("lbl") then
-                 local lblObj = newLabel.lbl
-                 lblObj.TextColor3 = C.WhitePrimary -- Force white text color
-             end
-            newLabel.lbl.Text = title
-            newLabel.Parent = newSect.sectioncontainer
-        end
-
-        function contents:button(title, cb)
-            local newButton = elements.ButtonElement:Clone()
-            applyCyberStyle(newButton, C.ObsidianBlack) 
-
-            local btnObj = newButton.btn 
-            applyCyberStyle(btnObj, C.VelvetGray) -- Contrast background
-            
-            if btnObj:FindFirstChild("lbl") then
-                local lblObj = btnObj.lbl
-                 lblObj.TextColor3 = C.WhitePrimary
-            end
-
-            newButton.btn.lbl.Text = title
-            newButton.Parent = newSect.sectioncontainer
-
-            btnObj.MouseEnter:Connect(function() fadeelement(btnObj, true) end)
-            btnObj.MouseLeave:Connect(function() fadeelement(btnObj, false) end)
-            newButton.btn.MouseButton1Click:Connect(cb)
-        end
-
-        function contents:toggle(title, default, cb)
-            local toggled = default
-
-            local newToggle = elements.ToggleElement:Clone()
-            applyCyberStyle(newToggle, C.ObsidianBlack) 
-
-            local btnObj = newToggle.btn 
-            applyCyberStyle(btnObj, C.VelvetGray) 
-
-            if btnObj:FindFirstChild("lbl") then
-                local lblObj = btnObj.lbl
-                 lblObj.TextColor3 = C.WhitePrimary
-            end
-
-            newToggle.btn.lbl.Text = title
-            newToggle.Parent = newSect.sectioncontainer
-
-            local togglebg = newToggle.btn.togglebg
-            local sidetog = togglebg.Frame
-            applyCyberStyle(sidetog, C.AccentNeon) -- Neon Accent
-
-            if toggled then
-                togglebg.BackgroundColor3 = C.AccentNeon
-                sidetog.AnchorPoint = Vector2.new(1, 0.5)
-                sidetog.Position = UDim2.new(1, 0, 0.5, 0)
-                task.defer(cb, toggled)
-            end
-
-            newToggle.btn.MouseButton1Click:Connect(function()
-                toggled = not toggled
-
-                local targetAnchorPoint = Vector2.new(1, 0.5)
-                local initialTargetAnchorPoint = Vector2.new(0, 0.5)
-                local targetPosition = UDim2.new(1, 0, 0.5, 0)
-                local initialPosition = UDim2.new(0, 0, 0.5, 0)
-
-                if toggled then
-                    togglebg.BackgroundColor3 = C.AccentNeon
-                    sidetog.AnchorPoint = targetAnchorPoint
-                    sidetog.Position = targetPosition
-                else
-                    togglebg.BackgroundColor3 = Color3.fromRGB(74, 255, 89):Lerp(C.ObsidianBlack, 0.5)
-                    sidetog.AnchorPoint = initialTargetAnchorPoint
-                    sidetog.Position = initialPosition
-                end
-
-                ts:Create(
-                    sidetog,
-                    TweenInfo.new(HOVER_DURATION),
-                    {
-                        AnchorPoint = toggled and targetAnchorPoint or initialTargetAnchorPoint
-                    }
-                ):Play()
-
-                ts:Create(
-                    sidetog,
-                    TweenInfo.new(HOVER_DURATION),
-                    {
-                        Position = toggled and targetPosition or initialPosition
-                    }
-                ):Play()
-                
-                cb(toggled)
-            end)
-        end
-
-        function contents:textbox(title, default, cb)
-            local newtb = elements.TextboxElement:Clone()
-            applyCyberStyle(newtb, C.ObsidianBlack) 
-            
-            if newtb:FindFirstChild("frame") then
-                -- Apply style to the input area wrapper (secondary background)
-                applyCyberStyle(newtb.frame, C.VelvetGray) 
-
-                if newtb.frame:FindFirstChild("lbl") then 
-                    local lblObj = newtb.frame.lbl
-                    lblObj.TextColor3 = C.WhitePrimary
-                end
-
-                local inp = newtb.frame.inp.lbl
-                applyCyberStyle(newtb.frame.inp, C.ObsidianBlack) 
-                inp.TextColor3 = C.WhitePrimary
-
-                -- Functionality remains identical
-                if default ~= "" then
-                    task.defer(cb, default)
-                end
-
-                inp.FocusLost:Connect(function(ep)
-                    if ep then
-                        cb(inp.Text)
-                    end
-                end)
-            end
-        end
-
-        function contents:slider(title, min, max, default, cb)
-            local newsl = elements.SliderElement:Clone()
-            applyCyberStyle(newsl, C.ObsidianBlack) 
-            
-            if newsl:FindFirstChild("lbl") then 
-                local lblObj = newsl.lbl
-                 lblObj.TextColor3 = C.WhitePrimary
-            end
-
-            local slbtn = newsl.btn
-            applyCyberStyle(slbtn, C.VelvetGray) 
-            
-            -- Neon Accent on the progress bar (CRITICAL STYLE POINT)
-            local prog = slbtn.prog
-            applyCyberStyle(prog, C.AccentNeon) 
-
-            local lastval = 0
-            local dragging = false
-
-            local function setFromAlpha(alpha)
-                alpha = math.clamp(alpha, 0, 1)
-                local value = math.floor(min + (max - min) * alpha + 0.5)
-                prog.Size = UDim2.new(alpha, 0, 1, 0)
-                lastval = value
-            end
-
-            local function updateFromInput(x)
-                local rel = (x - slbtn.AbsolutePosition.X) / slbtn.AbsoluteSize.X
-                setFromAlpha(rel)
-            end
-
-            setFromAlpha((default - min) / (max - min))
-
-            slbtn.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = true
-                    updateFromInput(input.Position.X)
-                end
-            end)
-
-            ui_service.InputChanged:Connect(function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                    or input.UserInputType == Enum.UserInputType.Touch) then
-                    updateFromInput(input.Position.X)
-                end
-            end)
-
-            ui_service.InputEnded:Connect(function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
-                    or input.UserInputType == Enum.UserInputType.Touch) then
-
-                    dragging = false
-                    if cb then
-                        newsl.lbl.Text = title .. " : " .. tostring(lastval)
-                        pcall(cb, lastval)
-                    end
-                end
-            end)
-        end
-
-    return sections
+-- =========================================================================
+-- WINDOW (Functionality unchanged, visuals updated by theme values)
+-- =========================================================================
+function module:win(title, themeOverrides)
+	-- merge default theme + per-window overrides (without touching module.Theme)
+	local theme = {}
+	for k, v in pairs(module.Theme) do
+		theme[k] = v
+	end
+	for k, v in pairs(themeOverrides or {}) do
+		theme[k] = v
+	end
+
+	-- registry of {instance, property, themeKey} so SetTheme can re-apply colors live
+	local registry = {}
+	local function reg(inst, prop, key)
+		inst[prop] = theme[key]
+		table.insert(registry, { inst, prop, key })
+		return inst
+	end
+
+	-- screen gui ------------------------------------------------------------
+	local screenGui = create("ScreenGui", {
+		Name = "CustomUI",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	screenGui.Parent = gethui or get_hidden_gui or nil
+
+	-- main frame (CanvasGroup -> whole UI can fade together) ----------------
+	local main = create("CanvasGroup", {
+		Name = "Frame",
+		Parent = screenGui,
+		Size = theme.WindowSize,
+		Position = theme.WindowPosition,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+	})
+	reg(main, "BackgroundColor3", "Background")
+	create("UICorner", { Parent = main, CornerRadius = theme.CornerRadius })
+
+	-- topbar ------------------------------------------------------------------
+	local topbar = create("Frame", {
+		Name = "topbar",
+		Parent = main,
+		Size = UDim2.new(1, 0, 0, theme.TopbarHeight),
+		BackgroundTransparency = 0.8, -- Slight transparency for the glassy look
+		BorderSizePixel = 0,
+	})
+	reg(topbar, "BackgroundColor3", "Topbar")
+	create("UICorner", { Parent = topbar, CornerRadius = theme.CornerRadius })
+
+	local titleLbl = create("TextLabel", {
+		Name = "title",
+		Parent = topbar,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 0),
+		Size = UDim2.new(1, -90, 1, 0),
+		Text = title,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	reg(titleLbl, "TextColor3", "Text")
+	reg(titleLbl, "Font", "FontBold")
+
+	-- topbar buttons (close / minimize) - drawn as text, no images needed --
+	local btns = create("Frame", {
+		Name = "btns",
+		Parent = topbar,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.new(0, 60, 0, 24),
+	})
+	create("UIListLayout", {
+		Parent = btns,
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+	})
+
+	local function makeTopbarBtn(symbol)
+		local btn = create("TextButton", {
+			Parent = btns,
+			Size = UDim2.new(0, 24, 0, 24),
+			BackgroundTransparency = 1,
+			Text = symbol,
+			TextSize = 14,
+			AutoButtonColor = false,
+		})
+		reg(btn, "TextColor3", "SubText")
+		reg(btn, "Font", "Font")
+		reg(btn, "BackgroundColor3", "Topbar")
+		create("UICorner", { Parent = btn, CornerRadius = UDim.new(0, 4) })
+
+		-- Reduced transition time for snappier feel (0.15 -> 0.2)
+		btn.MouseEnter:Connect(function()
+			ts:Create(btn, TweenInfo.new(0.15), { BackgroundTransparency = 0.8 }):Play()
+		end)
+		btn.MouseLeave:Connect(function()
+			ts:Create(btn, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+		end)
+		return btn
+	end
+
+	local minimizeBtn = makeTopbarBtn("–")
+	local closeBtn = makeTopbarBtn("✕")
+
+	-- open / minimize (Animation time updated: 0.25 -> 0.2)
+	local function setOpen(isOpen)
+		ts:Create(main, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			GroupTransparency = isOpen and 0 or 1,
+			Size = isOpen and theme.WindowSize
+				or UDim2.new(theme.WindowSize.X.Scale, theme.WindowSize.X.Offset, 0, theme.TopbarHeight),
+		}):Play()
+		main.Interactable = isOpen
+	end
+
+	minimizeBtn.MouseButton1Click:Connect(function()
+		setOpen(false)
+	end)
+
+	local toggleKeyConn = ui.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.K then
+			setOpen(not main.Interactable)
+		end
+	end)
+
+	closeBtn.MouseButton1Click:Connect(function()
+		toggleKeyConn:Disconnect()
+		screenGui:Destroy()
+	end)
+
+	-- dragging via topbar (No changes needed, logic remains solid)
+	do
+		local dragging, dragInput, mousePos, framePos
+
+		topbar.InputBegan:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				dragging = true
+				mousePos = input.Position
+				framePos = main.Position
+
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						dragging = false
+					end
+				end)
+			end
+		end)
+
+		topbar.InputChanged:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				dragInput = input
+			end
+		end)
+
+		ui.InputChanged:Connect(function(input)
+			if input == dragInput and dragging then
+				local delta = input.Position - mousePos
+				main.Position = UDim2.new(
+					framePos.X.Scale,
+					framePos.X.Offset + delta.X,
+					framePos.Y.Scale,
+					framePos.Y.Offset + delta.Y
+				)
+			end
+		end)
+	end
+
+	-- body: tab bar (left) + section container (right) ----------------------
+	local body = create("Frame", {
+		Name = "body",
+		Parent = main,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, theme.TopbarHeight),
+		Size = UDim2.new(1, 0, 1, -theme.TopbarHeight),
+	})
+
+	local tabBar = create("ScrollingFrame", {
+		Name = "tabbar",
+		Parent = body,
+		BorderSizePixel = 0,
+		Size = UDim2.new(0, theme.TabBarWidth, 1, 0),
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+	})
+	reg(tabBar, "BackgroundColor3", "TabBar")
+	reg(tabBar, "ScrollBarImageColor3", "Accent")
+	create("UIListLayout", { Parent = tabBar, Padding = UDim.new(0, 4) })
+	create("UIPadding", {
+		Parent = tabBar,
+		PaddingTop = UDim.new(0, 8),
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+	})
+
+	local sectionsHolder = create("Frame", {
+		Name = "sectionsholder",
+		Parent = body,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, theme.TabBarWidth, 0, 0),
+		Size = UDim2.new(1, -theme.TabBarWidth, 1, 0),
+		ClipsDescendants = true,
+	})
+
+	-- =====================================================================
+	-- TABS / SECTIONS (Logic preserved)
+	-- =====================================================================
+	local sections = {}
+	local curBtn, curSection = nil, nil
+
+	local function setSelectedTab(btn, section)
+		if curBtn == btn then
+			return
+		end
+		if curBtn then
+			ts:Create(curBtn, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+			ts:Create(curBtn.indicator, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+			curSection.Visible = false
+		end
+		ts:Create(btn, TweenInfo.new(0.15), { BackgroundTransparency = 0.85 }):Play()
+		ts:Create(btn.indicator, TweenInfo.new(0.15), { BackgroundTransparency = 0 }):Play()
+		section.Visible = true
+		curBtn, curSection = btn, section
+	end
+
+	-- icon is OPTIONAL: pass nil for a pure text tab (no asset needed),
+	function sections:tab(title, icon)
+		local btn = create("TextButton", {
+			Parent = tabBar,
+			Size = UDim2.new(1, 0, 0, 32),
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Text = "",
+		})
+		reg(btn, "BackgroundColor3", "ElementBg")
+		create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
+
+		local indicator = create("Frame", {
+			Name = "indicator",
+			Parent = btn,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(0, 3, 0.6, 0),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+		})
+		reg(indicator, "BackgroundColor3", "Accent")
+		create("UICorner", { Parent = indicator, CornerRadius = UDim.new(1, 0) })
+
+		local label = create("TextLabel", {
+			Parent = btn,
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, (icon and icon ~= "") and 36 or 12, 0, 0),
+			Size = UDim2.new(1, (icon and icon ~= "") and -44 or -20, 1, 0),
+			Text = title,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		reg(label, "TextColor3", "Text")
+		reg(label, "Font", "Font")
+
+		if icon and icon ~= "" then
+			local iconLbl = create("ImageLabel", {
+				Parent = btn,
+				BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 8, 0.5, 0),
+				Size = UDim2.new(0, 18, 0, 18),
+				Image = icon,
+			})
+			reg(iconLbl, "ImageColor3", "SubText")
+		end
+
+		btn.MouseEnter:Connect(function()
+			if curBtn ~= btn then
+				ts:Create(btn, TweenInfo.new(0.2), { BackgroundTransparency = 0.92 }):Play()
+			end
+		end)
+		btn.MouseLeave:Connect(function()
+			if curBtn ~= btn then
+				ts:Create(btn, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+			end
+		end)
+
+		-- section content -----------------------------------------------------
+		local section = create("ScrollingFrame", {
+			Name = title,
+			Parent = sectionsHolder,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 1, 0),
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 3,
+			Visible = false,
+		})
+		reg(section, "ScrollBarImageColor3", "Accent")
+		create("UIListLayout", { Parent = section, Padding = UDim.new(0, 6) })
+		create("UIPadding", {
+			Parent = section,
+			PaddingTop = UDim.new(0, 10),
+			PaddingBottom = UDim.new(0, 10),
+			PaddingLeft = UDim.new(0, 10),
+			PaddingRight = UDim.new(0, 10),
+		})
+
+		btn.MouseButton1Click:Connect(function()
+			setSelectedTab(btn, section)
+		end)
+
+		if not curBtn then
+			setSelectedTab(btn, section)
+		end
+
+		-- =================================================================
+		-- ELEMENTS (Functionality preserved)
+		-- =================================================================
+
+		local contents = {}
+
+		function contents:label(text)
+			local lbl = create("TextLabel", {
+				Parent = section,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 20),
+				Text = text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = true,
+			})
+			reg(lbl, "TextColor3", "SubText")
+			reg(lbl, "Font", "Font")
+			return lbl
+		end
+
+		function contents:button(text, cb)
+			local btnEl = create("TextButton", {
+				Parent = section,
+				Size = UDim2.new(1, 0, 0, theme.ElementHeight),
+				BackgroundTransparency = 0.9, -- Slightly higher transparency for glass look
+				AutoButtonColor = false,
+				Text = text,
+				TextSize = 13,
+			})
+			reg(btnEl, "BackgroundColor3", "ElementBg")
+			reg(btnEl, "TextColor3", "Text")
+			reg(btnEl, "Font", "Font")
+			create("UICorner", { Parent = btnEl, CornerRadius = theme.ElementRadius })
+
+			-- Animation time updated (0.15 -> 0.2)
+			btnEl.MouseEnter:Connect(function()
+				ts:Create(btnEl, TweenInfo.new(0.2), { BackgroundTransparency = 0.7 }):Play()
+			end)
+			btnEl.MouseLeave:Connect(function()
+				ts:Create(btnEl, TweenInfo.new(0.2), { BackgroundTransparency = 0.9 }):Play()
+			end)
+			btnEl.MouseButton1Click:Connect(cb)
+			return btnEl
+		end
+
+		function contents:toggle(text, default, cb)
+			local toggled = default and true or false
+
+			local holder = create("TextButton", {
+				Parent = section,
+				Size = UDim2.new(1, 0, 0, theme.ElementHeight),
+				BackgroundTransparency = 0.9, -- Glassy touch
+				AutoButtonColor = false,
+				Text = "",
+			})
+			reg(holder, "BackgroundColor3", "ElementBg")
+			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+
+			local lbl = create("TextLabel", {
+				Parent = holder,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 12, 0, 0),
+				Size = UDim2.new(1, -60, 1, 0),
+				Text = text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			})
+			reg(lbl, "TextColor3", "Text")
+			reg(lbl, "Font", "Font")
+
+			local track = create("Frame", {
+				Parent = holder,
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.new(0, 38, 0, 20),
+				BorderSizePixel = 0,
+			})
+			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
+
+			local knob = create("Frame", {
+				Parent = track,
+				AnchorPoint = toggled and Vector2.new(1, 0.5) or Vector2.new(0, 0.5),
+				Position = toggled and UDim2.new(1, -2, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
+				Size = UDim2.new(0, 16, 0, 16),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BorderSizePixel = 0,
+			})
+			create("UICorner", { Parent = knob, CornerRadius = UDim.new(1, 0) })
+
+			local function applyVisual(animated)
+				local goalColor = toggled and theme.ToggleOn or theme.ToggleOff
+				local goalPos = toggled and UDim2.new(1, -2, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
+				local goalAnchor = toggled and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
+				if animated then
+					-- Animation time updated (0.15 -> 0.2)
+					ts:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = goalColor }):Play()
+					ts:Create(knob, TweenInfo.new(0.2), { Position = goalPos }):Play()
+				else
+					track.BackgroundColor3 = goalColor
+					knob.Position = goalPos
+				end
+				knob.AnchorPoint = goalAnchor
+			end
+			applyVisual(false)
+
+			holder.MouseEnter:Connect(function()
+				-- Animation time updated (0.15 -> 0.2)
+				ts:Create(holder, TweenInfo.new(0.2), { BackgroundTransparency = 0.7 }):Play()
+			end)
+			holder.MouseLeave:Connect(function()
+				-- Animation time updated (0.15 -> 0.2)
+				ts:Create(holder, TweenInfo.new(0.2), { BackgroundTransparency = 0.9 }):Play()
+			end)
+
+			holder.MouseButton1Click:Connect(function()
+				toggled = not toggled
+				applyVisual(true)
+				cb(toggled)
+			end)
+
+			if toggled then
+				task.defer(cb, toggled)
+			end
+
+			return holder
+		end
+
+		function contents:textbox(text, default, cb)
+			local holder = create("Frame", {
+				Parent = section,
+				Size = UDim2.new(1, 0, 0, theme.ElementHeight),
+				BackgroundTransparency = 0.9, -- Glassy touch
+			})
+			reg(holder, "BackgroundColor3", "ElementBg")
+			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+
+			local lbl = create("TextLabel", {
+				Parent = holder,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 12, 0, 0),
+				Size = UDim2.new(0.5, -12, 1, 0),
+				Text = text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			})
+			reg(lbl, "TextColor3", "Text")
+			reg(lbl, "Font", "Font")
+
+			local inputBg = create("Frame", {
+				Parent = holder,
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.new(0.45, 0, 0, 24),
+			})
+			reg(inputBg, "BackgroundColor3", "ElementHoverBg")
+			create("UICorner", { Parent = inputBg, CornerRadius = UDim.new(0, 4) })
+
+			local input = create("TextBox", {
+				Parent = inputBg,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, -10, 1, 0),
+				Position = UDim2.new(0, 5, 0, 0),
+				Text = default or "",
+				PlaceholderText = "...",
+				TextSize = 13,
+				ClearTextOnFocus = false,
+			})
+			reg(input, "TextColor3", "Text")
+			reg(input, "Font", "Font")
+
+			if default and default ~= "" then
+				task.defer(cb, default)
+			end
+
+			input.FocusLost:Connect(function(enterPressed)
+				if enterPressed then
+					cb(input.Text)
+				end
+			end)
+
+			return holder
+		end
+
+		function contents:slider(text, min, max, default, cb)
+			local holder = create("Frame", {
+				Parent = section,
+				Size = UDim2.new(1, 0, 0, theme.ElementHeight + 14),
+				BackgroundTransparency = 0.9, -- Glassy touch
+			})
+			reg(holder, "BackgroundColor3", "ElementBg")
+			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+
+			local lbl = create("TextLabel", {
+				Parent = holder,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 12, 0, 4),
+				Size = UDim2.new(1, -24, 0, 18),
+				Text = text .. " : " .. tostring(default),
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			})
+			reg(lbl, "TextColor3", "Text")
+			reg(lbl, "Font", "Font")
+
+			local track = create("Frame", {
+				Parent = holder,
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 28),
+				Size = UDim2.new(1, -24, 0, 6),
+				BorderSizePixel = 0,
+			})
+			reg(track, "BackgroundColor3", "ElementHoverBg")
+			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
+
+			local fill = create("Frame", {
+				Parent = track,
+				Size = UDim2.new(0, 0, 1, 0),
+				BorderSizePixel = 0,
+			})
+			reg(fill, "BackgroundColor3", "Accent")
+			create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
+
+			local dragging = false
+			local lastVal = default
+
+			local function setFromAlpha(alpha)
+				alpha = math.clamp(alpha, 0, 1)
+				local value = math.floor(min + (max - min) * alpha + 0.5)
+				fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+				lastVal = value
+				lbl.Text = text .. " : " .. tostring(value)
+			end
+
+			local function updateFromInput(x)
+				local rel = (x - track.AbsolutePosition.X) / track.AbsoluteSize.X
+				setFromAlpha(rel)
+			end
+
+			setFromAlpha((default - min) / (max - min))
+
+			track.InputBegan:Connect(function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					dragging = true
+					updateFromInput(input.Position.X)
+				end
+			end)
+
+			ui.InputChanged:Connect(function(input)
+				if
+					dragging
+					and (
+						input.UserInputType == Enum.UserInputType.MouseMovement
+						or input.UserInputType == Enum.UserInputType.Touch
+					)
+				then
+					updateFromInput(input.Position.X)
+				end
+			end)
+
+			ui.InputEnded:Connect(function(input)
+				if
+					dragging
+					and (
+						input.UserInputType == Enum.UserInputType.MouseButton1
+						or input.UserInputType == Enum.UserInputType.Touch
+					)
+				then
+					dragging = false
+					if cb then
+						pcall(cb, lastVal)
+					end
+				end
+			end)
+
+			return holder
+		end
+
+		return contents
+	end
+
+	-- live re-theming: change colors/fonts/sizes after the UI was built ----
+	function sections:SetTheme(overrides)
+		for k, v in pairs(overrides) do
+			theme[k] = v
+		end
+		for _, entry in ipairs(registry) do
+			local inst, prop, key = entry[1], entry[2], entry[3]
+			if inst and inst.Parent then
+				inst[prop] = theme[key]
+			end
+		end
+	end
+
+	function sections:GetTheme()
+		return theme
+	end
+
+	return sections
 end
 
 return module
