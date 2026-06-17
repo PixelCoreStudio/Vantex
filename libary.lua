@@ -196,11 +196,14 @@ function module:win(title, themeOverrides)
 	local closeBtn = makeTopbarBtn("X")
 
 	local function setOpen(isOpen)
-		ts:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-			GroupTransparency = isOpen and 0 or 1,
-			Size = isOpen and theme.WindowSize or UDim2.new(theme.WindowSize.X.Scale, theme.WindowSize.X.Offset, 0, theme.TopbarHeight),
-		}):Play()
-		main.Interactable = isOpen
+    	ts:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        	GroupTransparency = isOpen and 0 or 1,
+        	Size = isOpen and theme.WindowSize or UDim2.new(theme.WindowSize.X.Scale, theme.WindowSize.X.Offset, 0, theme.TopbarHeight),
+    	}):Play()
+    	ts:Create(mainStroke, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        	Transparency = isOpen and theme.WindowStrokeTransparency or 1,
+    	}):Play()
+    	main.Interactable = isOpen
 	end
 
 	minimizeBtn.MouseButton1Click:Connect(function()
