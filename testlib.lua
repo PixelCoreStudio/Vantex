@@ -926,6 +926,89 @@ function module:win(config)
 					end)
 				end
 			end
+
+			function contents:keybind(text, id, default, cb)
+			    text = checkText(text)
+			    id = tostring(id or text)
+                
+			    local currentKey = default
+			    if typeof(currentKey) == "EnumItem" then
+			    	currentKey = currentKey.Name
+			    elseif type(currentKey) ~= "string" then
+			    	currentKey = "None"
+			    end
+
+			    if savedData[id] ~= nil then currentKey = tostring(savedData[id]) end
+
+			    local holder = create("Frame", {
+			    	Parent = section,
+			    	Size = UDim2.new(1, 0, 0, theme.ElementHeight),
+			    	BackgroundTransparency = theme.ElementTransparency,
+			    })
+			    reg(holder, "BackgroundColor3", "ElementBg")
+			    create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+
+			    local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.5, -12, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+			    reg(lbl, "TextColor3", "Text")
+			    reg(lbl, "Font", "Font")
+
+			    local bindBtn = create("TextButton", { Parent = holder, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(0.35, 0, 0, 24), Text = currentKey, TextSize = 12, AutoButtonColor = false })
+			    reg(bindBtn, "BackgroundColor3", "ElementHoverBg")
+			    reg(bindBtn, "TextColor3", "SubText")
+			    reg(bindBtn, "Font", "Font")
+			    create("UICorner", { Parent = bindBtn, CornerRadius = UDim.new(0, 6) })
+
+			    local glow = create("UIStroke", { Parent = bindBtn, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+			    reg(glow, "Color", "Accent")
+
+			    local listening = false
+
+			    bindBtn.MouseButton1Click:Connect(function()
+			    	if listening then return end
+			    	listening = true
+			    	bindBtn.Text = "..."
+			    	reg(bindBtn, "TextColor3", "Accent")
+			    	ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeHoverTransparency }):Play()
+			    end)
+
+			    local inputConn
+			    inputConn = ui.InputBegan:Connect(function(input, processed)
+			    	if not screenGui or not screenGui.Parent then
+			    		inputConn:Disconnect()
+			    		return
+			    	end
+                
+			    	if listening then
+			    		if input.UserInputType == Enum.UserInputType.Keyboard then
+			    			listening = false
+			    			currentKey = input.KeyCode.Name
+			    			bindBtn.Text = currentKey
+			    			reg(bindBtn, "TextColor3", "SubText")
+			    			ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeTransparency }):Play()
+                        
+			    			savedData[id] = currentKey
+			    			saveConfig()
+			    		elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+			    			listening = false
+			    			bindBtn.Text = currentKey
+			    			reg(bindBtn, "TextColor3", "SubText")
+			    			ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeTransparency }):Play()
+			    		end
+			    	else
+			    		if not processed and currentKey ~= "None" and input.KeyCode.Name == currentKey then
+			    			if cb then pcall(cb) end
+			    		end
+			    	end
+			    end)
+
+			    -- Initialer Trigger beim Starten, falls geladen
+			    if cb and currentKey ~= "None" then
+			    	-- Falls du beim Laden direkt triggern willst, hier aktivieren
+			    end
+
+			    return holder
+		    end
+			
 			updateOptions()
 
 			trigger.MouseButton1Click:Connect(function()
