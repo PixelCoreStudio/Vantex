@@ -121,12 +121,12 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- DISCORD INVITE SYSTEM
+	-- DISCORD INVITE SYSTEM (Handles Full Links & Raw Codes)
 	-------------------------------------------------------------------
 	local discordSettings = config.Discord or { Enabled = false }
-	if discordSettings.Enabled and request and discordSettings.Invite and discordSettings.Invite ~= "noinvitelink" then
+	if discordSettings.Enabled and discordSettings.Invite and discordSettings.Invite ~= "noinvitelink" then
 		local shouldPrompt = true
-		if discordSettings.RememberJoins and isfile and readfile and writefile then
+		if discordSettings.RememberJoins and isfile and readfile then
 			if isfile(folderName .. "/discord_joined.txt") then
 				shouldPrompt = false
 			end
@@ -134,24 +134,53 @@ function module:win(config)
 
 		if shouldPrompt then
 			task.spawn(function()
-				pcall(function()
-					request({
-						Url = "http://127.0.0.1:6463/rpc?v=1",
-						Method = "POST",
-						Headers = {
-							["Content-Type"] = "application/json",
-							["Origin"] = "https://discord.com"
-						},
-						Body = hs:JSONEncode({
-							cmd = "INVITE_BROWSER",
-							args = { code = discordSettings.Invite },
-							nonce = hs:GenerateGUID(false)
+				local rawInput = discordSettings.Invite
+				
+				-- 1. Reinen Code extrahieren (für die Discord Desktop-App)
+				local inviteCode = rawInput:gsub("https://discord.gg/", "")
+				inviteCode = inviteCode:gsub("http://discord.gg/", "")
+				inviteCode = inviteCode:gsub("discord.gg/", "")
+				inviteCode = inviteCode:gsub("https://discord.com/invite/", "")
+				inviteCode = inviteCode:gsub("http://discord.com/invite/", "")
+				inviteCode = inviteCode:trim() -- Falls Leerzeichen drin sind
+
+				-- 2. Voller Link generieren (für den Browser-Fallback)
+				local fullUrl = "https://discord.gg/" .. inviteCode
+
+				local http_request = request or (syn and syn.request) or (http and http.request)
+				if http_request then
+					-- Methode 1: Direkt über die Discord Desktop-App (RPC)
+					local success, _ = pcall(function()
+						return http_request({
+							Url = "http://127.0.0.1:6463/rpc?v=1",
+							Method = "POST",
+							Headers = {
+								["Content-Type"] = "application/json",
+								["Origin"] = "https://discord.com"
+							},
+							Body = hs:JSONEncode({
+								cmd = "INVITE_BROWSER",
+								args = { code = inviteCode },
+								nonce = hs:GenerateGUID(false)
+							})
 						})
-					})
+					end)
+
+					-- Methode 2: Fallback über den Browser, falls RPC fehlschlägt
+					if not success then
+						pcall(function()
+							http_request({
+								Url = fullUrl,
+								Method = "GET"
+							})
+						end)
+					end
+
+					-- Speichern, um erneuten Prompt zu verhindern
 					if discordSettings.RememberJoins and writefile then
 						writefile(folderName .. "/discord_joined.txt", "true")
 					end
-				end)
+				end
 			end)
 		end
 	end
