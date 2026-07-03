@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Added divider
+    - Added a :Get()
 ]]
 
 local module = {}
@@ -629,6 +629,13 @@ function module:win(config)
 					reg(iconLbl, "ImageColor3", "SubText")
 				end
 			end
+			function labelObj:Get()
+				return {
+					Title = textLbl.Text,
+					Color = textLbl.TextColor3,
+					IconVisible = iconLbl.Visible,
+				}
+			end
 			return labelObj
 		end
 		contents.CreateLabel = contents.label
@@ -651,6 +658,9 @@ function module:win(config)
 			local btnObj = { Instance = btnEl }
 			function btnObj:Set(newText)
 				btnEl.Text = checkText(newText)
+			end
+			function btnObj:Get()
+				return btnEl.Text
 			end
 			return btnObj
 		end
@@ -719,6 +729,9 @@ function module:win(config)
 				applyVisual(true)
 				if cb and not silent then cb(toggled) end
 			end
+			function toggleObj:Get()
+				return toggled
+			end
 			return toggleObj
 		end
 
@@ -770,6 +783,9 @@ function module:win(config)
 				savedData[id] = newText
 				saveConfig()
 				if cb and not silent then cb(newText) end
+			end
+			function textboxObj:Get()
+				return input.Text
 			end
 			return textboxObj
 		end
@@ -849,6 +865,9 @@ function module:win(config)
 				saveConfig()
 				if cb and not silent then pcall(cb, lastVal) end
 			end
+			function sliderObj:Get()
+				return lastVal
+			end
 			return sliderObj
 		end
 
@@ -921,7 +940,10 @@ function module:win(config)
 				indicator.Text = dropdownOpen and "^" or "V"
 			end)
 
-			return { Refresh = function(_, nl, nd) list = nl or {}; if nd then currentSelected = nd; selectedLbl.Text = tostring(nd) end; updateOptions() end }
+			return {
+				Refresh = function(_, nl, nd) list = nl or {}; if nd then currentSelected = nd; selectedLbl.Text = tostring(nd) end; updateOptions() end,
+				Get = function(_) return currentSelected end,
+			}
 		end
 
 		function contents:keybind(text, id, default, cb, opts)
@@ -1020,6 +1042,9 @@ function module:win(config)
 				savedData[id] = currentKey
 				saveConfig()
 			end
+			function keybindObj:Get()
+				return currentKey, holding
+			end
 			return keybindObj
 		end
 
@@ -1047,6 +1072,9 @@ function module:win(config)
 				newConfig = type(newConfig) == "table" and newConfig or {}
 				if newConfig.Title ~= nil then titleLbl.Text = checkText(newConfig.Title) end
 				if newConfig.Content ~= nil then contentLbl.Text = checkText(newConfig.Content) end
+			end
+			function paragraphObj:Get()
+				return { Title = titleLbl.Text, Content = contentLbl.Text }
 			end
 			return paragraphObj
 		end
@@ -1169,6 +1197,9 @@ function module:win(config)
 				applyColor(newColor, not silent)
 				refreshSliders()
 			end
+			function colorPickerObj:Get()
+				return currentColor
+			end
 			return colorPickerObj
 		end
 		function contents:CreateDivider()
@@ -1179,6 +1210,9 @@ function module:win(config)
 			local dividerObj = { Instance = holder }
 			function dividerObj:Set(visible)
 				holder.Visible = (visible ~= false)
+			end
+			function dividerObj:Get()
+				return holder.Visible
 			end
 			return dividerObj
 		end
