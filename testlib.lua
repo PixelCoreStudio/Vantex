@@ -1,7 +1,8 @@
 --[[
-    Customizable UI Library - No Auto-Execution Version
-    - FIXED: Elements no longer auto-execute their callbacks upon loading!
-    - FIXED: Keybind passes key correctly.
+    Customizable UI Library - Fixed Config Saving & Added Discord
+    - FIXED: Configuration saving now correctly checks for .Enable or .Enabled
+    - FIXED: Key System now properly ensures the folder exists before saving the key
+    - ADDED: Discord invite system (prompts join on load if enabled)
 ]]
 
 local module = {}
@@ -74,13 +75,6 @@ function module:win(config)
 		for k, v in pairs(config.ThemeOverrides) do theme[k] = v end
 	end
 
-	local registry = {}
-	local function reg(inst, prop, key)
-		inst[prop] = theme[key]
-		table.insert(registry, { inst, prop, key })
-		return inst
-	end
-
 	local screenGui = create("ScreenGui", {
 		Name = "CustomUI",
 		ResetOnSpawn = false,
@@ -91,26 +85,29 @@ function module:win(config)
 	screenGui.Parent = hui and hui() or cg
 
 	-------------------------------------------------------------------
-	-- CONFIGURATION SAVING SYSTEM
+	-- CONFIGURATION SAVING SYSTEM (FIXED)
 	-------------------------------------------------------------------
 	local cfgSettings = config.ConfigurationSaving or { Enabled = false }
+	-- Akzeptiere sowohl .Enable als auch .Enabled aus deiner Config
+	local isSavingEnabled = (cfgSettings.Enabled == true or cfgSettings.Enable == true)
+	
 	local savedData = {}
 	local folderName = cfgSettings.FolderName or "CustomUILocks"
 	local fileName = (cfgSettings.FileName or "Big Hub") .. ".json"
 
-	if cfgSettings.Enabled and writefile and readfile and isfolder and makefolder then
+	if isSavingEnabled and writefile and readfile and isfolder and makefolder then
 		if not isfolder(folderName) then
 			makefolder(folderName)
 		end
 		if isfile(folderName .. "/" .. fileName) then
 			pcall(function()
-				savedData = hs:JSONEncode(readfile(folderName .. "/" .. fileName))
+				savedData = hs:JSONDecode(readfile(folderName .. "/" .. fileName))
 			end)
 		end
 	end
 
 	local function saveConfig()
-		if cfgSettings.Enabled and writefile then
+		if isSavingEnabled and writefile then
 			pcall(function()
 				writefile(folderName .. "/" .. fileName, hs:JSONEncode(savedData))
 			end)
@@ -118,7 +115,49 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- KEY SYSTEM
+	-- DISCORD SYSTEM (NEU)
+	-------------------------------------------------------------------
+	local discordSettings = config.Discord or { Enable = false }
+	if (discordSettings.Enable or discordSettings.Enabled) and discordSettings.Invite then
+		task.spawn(function()
+			local inviteCode = tostring(discordSettings.Invite):gsub("https://discord.gg/", ""):gsub("discord.gg/", "")
+			
+			-- Falls RememberJoins false ist (oder die Join-Datei noch nicht existiert), feuern wir den Invite ab
+			local launchInvite = true
+			if discordSettings.RememberJoins and isfolder and isfile and isfolder(folderName) then
+				if isfile(folderName .. "/discord_joined.txt") then
+					launchInvite = false
+				end
+			end
+
+			if launchInvite then
+				if request or syn and syn.request or http and http.request then
+					local req = request or syn.request or http.request
+					pcall(req, {
+						Url = "http://127.0.0.1:6463/rpc?v=1",
+						Method = "POST",
+						Headers = {
+							["Content-Type"] = "application/json",
+							["Origin"] = "https://discord.com"
+						},
+						Body = hs:JSONEncode({
+							cmd = "INVITE_BROWSER",
+							args = { code = inviteCode },
+							nonce = hs:GenerateGUID(false)
+						})
+					})
+				end
+				
+				-- Wenn sich die Library das merken soll, Datei erstellen
+				if discordSettings.RememberJoins and writefile and isfolder and isfolder(folderName) then
+					writefile(folderName .. "/discord_joined.txt", "true")
+				end
+			end
+		end)
+	end
+
+	-------------------------------------------------------------------
+	-- KEY SYSTEM (FIXED)
 	-------------------------------------------------------------------
 	if config.KeySystem then
 		local keySettings = config.KeySettings or {}
@@ -127,6 +166,8 @@ function module:win(config)
 		local keyNote = keySettings.Note or "No method of obtaining the key is provided"
 		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
 		local validKeys = keySettings.Key or {"Hello"}
+
+		if type(validKeys) == "string" then validKeys = {validKeys} end
 
 		if keySettings.GrabKeyFromSite and keySettings.Key and type(keySettings.Key) == "string" then
 			pcall(function()
@@ -139,6 +180,11 @@ function module:win(config)
 		end
 
 		local keyPassed = false
+		-- Stelle sicher, dass der Ordner existiert, falls ConfigSaving aus war, aber KeySaving an ist
+		if makefolder and isfolder and not isfolder(folderName) then
+			makefolder(folderName)
+		end
+
 		if keySettings.SaveKey and isfile and readfile and isfile(folderName .. "/" .. keyFileName) then
 			local savedKey = readfile(folderName .. "/" .. keyFileName)
 			for _, k in ipairs(validKeys) do
@@ -412,7 +458,6 @@ function module:win(config)
 				if cb then cb(toggled) end
 			end)
 
-			-- AUTO-EXECUTION ENTFERNT
 			return holder
 		end
 
@@ -453,7 +498,6 @@ function module:win(config)
 				if cb then cb(input.Text) end
 			end)
 
-			-- AUTO-EXECUTION ENTFERNT
 			return holder
 		end
 
@@ -528,7 +572,6 @@ function module:win(config)
 				setFromAlpha(denom > 0 and ((valStart - min) / denom) or 0)
 			end)
 
-			-- AUTO-EXECUTION ENTFERNT
 			return holder
 		end
 
@@ -601,7 +644,6 @@ function module:win(config)
 				indicator.Text = open and "^" or "V"
 			end)
 
-			-- AUTO-EXECUTION ENTFERNT
 			return { Refresh = function(_, nl, nd) list = nl or {}; if nd then currentSelected = nd; selectedLbl.Text = tostring(nd) end; updateOptions() end }
 		end
 
