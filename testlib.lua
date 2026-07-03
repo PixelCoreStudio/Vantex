@@ -785,72 +785,89 @@ function module:win(config)
 			return holder
 		end
 
-		function contents:slider(text, id, min, max, default, cb)
-			text = checkText(text)
-			id = tostring(id or text)
-			
-			local valStart = default
-			if savedData[id] ~= nil then valStart = tonumber(savedData[id]) or default end
-
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight + 14), BackgroundTransparency = theme.ElementTransparency })
-			reg(holder, "BackgroundColor3", "ElementBg")
-			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
-
-			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 4), Size = UDim2.new(1, -24, 0, 18), Text = text .. " : " .. tostring(valStart), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
-			reg(lbl, "TextColor3", "Text")
-			reg(lbl, "Font", "Font")
-
-			local track = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 28), Size = UDim2.new(1, -24, 0, 6), BorderSizePixel = 0 })
-			reg(track, "BackgroundColor3", "ElementHoverBg")
-			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
-
-			local fill = create("Frame", { Parent = track, Size = UDim2.new(0, 0, 1, 0), BorderSizePixel = 0 })
-			reg(fill, "BackgroundColor3", "Accent")
-			create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
-
-			local dragging = false
-			local lastVal = valStart
-
-			local function setFromAlpha(alpha)
-				alpha = math.clamp(alpha, 0, 1)
-				local value = math.floor(min + (max - min) * alpha + 0.5)
-				fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-				lastVal = value
-				lbl.Text = text .. " : " .. tostring(value)
-			end
-
-			local function updateFromInput(x)
-				local rel = (x - track.AbsolutePosition.X) / track.AbsoluteSize.X
-				setFromAlpha(rel)
-			end
-
-			setFromAlpha((valStart - min) / (max - min))
-
-			track.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-					dragging = true
-					updateFromInput(input.Position.X)
-				end
-			end)
-
-			ui.InputChanged:Connect(function(input)
-				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-					updateFromInput(input.Position.X)
-				end
-			end)
-
-			ui.InputEnded:Connect(function(input)
-				if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-					dragging = false
-					savedData[id] = lastVal
-					saveConfig()
-					if cb then pcall(cb, lastVal) end
-				end
-			end)
-
-			if cb then task.defer(cb, lastVal) end
-			return holder
-		end
+        function contents:slider(text, id, min, max, default, cb)
+            text = checkText(text)
+            id = tostring(id or text)
+            
+            -- Typsicherungen, falls Parameter vertauscht wurden
+            min = tonumber(min) or 0
+            max = tonumber(max) or 100
+            if type(default) == "function" then 
+                cb = default 
+                default = min 
+            end
+            default = tonumber(default) or min
+        
+            local valStart = default
+            if savedData[id] ~= nil then valStart = tonumber(savedData[id]) or default end
+        
+            local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight + 14), BackgroundTransparency = theme.ElementTransparency })
+            reg(holder, "BackgroundColor3", "ElementBg")
+            create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+        
+            local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 4), Size = UDim2.new(1, -24, 0, 18), Text = text .. " : " .. tostring(valStart), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+            reg(lbl, "TextColor3", "Text")
+            reg(lbl, "Font", "Font")
+        
+            local track = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 28), Size = UDim2.new(1, -24, 0, 6), BorderSizePixel = 0 })
+            reg(track, "BackgroundColor3", "ElementHoverBg")
+            create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
+        
+            local fill = create("Frame", { Parent = track, Size = UDim2.new(0, 0, 1, 0), BorderSizePixel = 0 })
+            reg(fill, "BackgroundColor3", "Accent")
+            create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
+        
+            local dragging = false
+            local lastVal = valStart
+        
+            local function setFromAlpha(alpha)
+                alpha = math.clamp(alpha, 0, 1)
+                local value = math.floor(min + (max - min) * alpha + 0.5)
+                
+                -- Verhindert Division durch Null, falls min == max
+                local denom = (max - min)
+                local scaleX = denom > 0 and ((value - min) / denom) or 0
+                
+                fill.Size = UDim2.new(scaleX, 0, 1, 0)
+                lastVal = value
+                lbl.Text = text .. " : " .. tostring(value)
+            end
+        
+            local function updateFromInput(x)
+                if track.AbsoluteSize.X > 0 then
+                    local rel = (x - track.AbsolutePosition.X) / track.AbsoluteSize.X
+                    setFromAlpha(rel)
+                end
+            end
+        
+            local denom = (max - min)
+            setFromAlpha(denom > 0 and ((valStart - min) / denom) or 0)
+        
+            track.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    updateFromInput(input.Position.X)
+                end
+            end)
+        
+            ui.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    updateFromInput(input.Position.X)
+                end
+            end)
+        
+            ui.InputEnded:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                    dragging = false
+                    savedData[id] = lastVal
+                    saveConfig()
+                    if cb then pcall(cb, lastVal) end
+                end
+            end)
+        
+            if cb then task.defer(cb, lastVal) end
+            return holder
+        end
 
 		function contents:dropdown(text, id, list, default, cb)
 			text = checkText(text)
