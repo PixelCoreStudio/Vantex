@@ -1,17 +1,19 @@
 --[[
     Customizable UI Library
     Original concept by esore aka vaehz - rewritten so the WHOLE design
-    can be customized via module.Theme / win(title, themeOverrides) /
+    can be customized via module.Theme / win(config) /
     window:SetTheme(...) WITHOUT having to build new UI assets.
 
     -------------------------------------------------------------------
-    THEME PASS: "Minimal Cyberpunk" Expanded
+    THEME PASS: "Cyberpunk Premium" Expanded
     Fixes & Extensions:
     - Glow-Error behoben
     - Textbox Table-Sicherheitsnetz integriert
     - Topbar-Icons auf Standard-ASCII umgestellt (Bloxstrap/FrostX kompatibel)
-    - NEU: Dropdown-Element mit sanftem Öffnungs-Tween & Scroll-Unterstützung
-    - NEU: Keybind-Element zum dynamischen Zuweisen von Hotkeys
+    - Dropdown-Element mit sanftem Öffnungs-Tween & Scroll-Unterstützung
+    - Keybind-Element zum dynamischen Zuweisen von Hotkeys
+    - NEU: Rayfield-artiges CreateWindow-Konfigurations-Table
+    - NEU: Integrierter, animierter Loading Screen vor dem UI-Start
     -------------------------------------------------------------------
 ]]
 
@@ -71,15 +73,34 @@ local function checkText(val)
 	return tostring(val or "")
 end
 
-function module:win(title, themeOverrides)
-	title = checkText(title)
+-- win akzeptiert nun ein Konfigurations-Table (wie Rayfield:CreateWindow)
+function module:win(config)
+	config = type(config) == "table" and config or {}
 	
+	local title = checkText(config.Name or "Custom Interface Suite")
+	local loadingTitle = checkText(config.LoadingTitle or title)
+	local loadingSubtitle = checkText(config.LoadingSubtitle or "Loading assets...")
+	
+	-- Keybind-Verarbeitung (String "K" zu Enum umwandeln falls nötig)
+	local toggleKey = Enum.KeyCode.K
+	if config.ToggleUIKeybind then
+		if typeof(config.ToggleUIKeybind) == "EnumItem" then
+			toggleKey = config.ToggleUIKeybind
+		elseif type(config.ToggleUIKeybind) == "string" and #config.ToggleUIKeybind == 1 then
+			pcall(function()
+				toggleKey = Enum.KeyCode[config.ToggleUIKeybind:upper()]
+			end)
+		end
+	end
+
 	local theme = {}
 	for k, v in pairs(module.Theme) do
 		theme[k] = v
 	end
-	for k, v in pairs(themeOverrides or {}) do
-		theme[k] = v
+	if config.ThemeOverrides then
+		for k, v in pairs(config.ThemeOverrides) do
+			theme[k] = v
+		end
 	end
 
 	local registry = {}
@@ -98,6 +119,75 @@ function module:win(title, themeOverrides)
 	local hui = gethui or get_hidden_gui or nil
 	screenGui.Parent = hui and hui() or cg
 
+	-------------------------------------------------------------------
+	-- LOADING SCREEN (RAYFIELD-STYLE)
+	-------------------------------------------------------------------
+	local loadingFrame = create("CanvasGroup", {
+		Name = "LoadingScreen",
+		Parent = screenGui,
+		Size = theme.WindowSize,
+		Position = theme.WindowPosition,
+		BackgroundTransparency = 0.05,
+		BorderSizePixel = 0,
+	})
+	reg(loadingFrame, "BackgroundColor3", "Background")
+	create("UICorner", { Parent = loadingFrame, CornerRadius = theme.CornerRadius })
+	
+	local loadStroke = create("UIStroke", {
+		Parent = loadingFrame,
+		Thickness = 1,
+		Transparency = theme.WindowStrokeTransparency,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+	reg(loadStroke, "Color", "Accent")
+
+	local loadTitleLbl = create("TextLabel", {
+		Parent = loadingFrame,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0.3, 0),
+		Size = UDim2.new(1, 0, 0, 30),
+		Text = loadingTitle,
+		TextSize = 22,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+	reg(loadTitleLbl, "TextColor3", "Text")
+	reg(loadTitleLbl, "Font", "FontBold")
+
+	local loadSubLbl = create("TextLabel", {
+		Parent = loadingFrame,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0.3, 35),
+		Size = UDim2.new(1, 0, 0, 20),
+		Text = loadingSubtitle,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+	reg(loadSubLbl, "TextColor3", "SubText")
+	reg(loadSubLbl, "Font", "Font")
+
+	-- Progress Bar Hintergrund
+	local barBg = create("Frame", {
+		Parent = loadingFrame,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.7, 0),
+		Size = UDim2.new(0.7, 0, 0, 4),
+		BorderSizePixel = 0,
+	})
+	reg(barBg, "BackgroundColor3", "ElementBg")
+	create("UICorner", { Parent = barBg, CornerRadius = UDim.new(1, 0) })
+
+	-- Progress Bar Füllung
+	local barFill = create("Frame", {
+		Parent = barBg,
+		Size = UDim2.new(0, 0, 1, 0),
+		BorderSizePixel = 0,
+	})
+	reg(barFill, "BackgroundColor3", "Accent")
+	create("UICorner", { Parent = barFill, CornerRadius = UDim.new(1, 0) })
+
+	-------------------------------------------------------------------
+	-- MAIN UI WINDOW (Vorerst unsichtbar)
+	-------------------------------------------------------------------
 	local main = create("CanvasGroup", {
 		Name = "Frame",
 		Parent = screenGui,
@@ -106,6 +196,8 @@ function module:win(title, themeOverrides)
 		BackgroundTransparency = 0.05,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
+		GroupTransparency = 1, -- Startet unsichtbar
+		Interactable = false,
 	})
 	reg(main, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = main, CornerRadius = theme.CornerRadius })
@@ -113,7 +205,7 @@ function module:win(title, themeOverrides)
 	local mainStroke = create("UIStroke", {
 		Parent = main,
 		Thickness = 1,
-		Transparency = theme.WindowStrokeTransparency,
+		Transparency = 1,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 	})
 	reg(mainStroke, "Color", "Accent")
@@ -212,7 +304,7 @@ function module:win(title, themeOverrides)
 	end)
 
 	local toggleKeyConn = ui.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == Enum.KeyCode.K then
+		if not processed and input.KeyCode == toggleKey then
 			setOpen(not main.Interactable)
 		end
 	end)
@@ -949,6 +1041,37 @@ function module:win(title, themeOverrides)
 	end
 
 	function sections:GetTheme() return theme end
+
+	-------------------------------------------------------------------
+	-- ANMATION & INITIALISIERUNG DES LOADING SCREENS
+	-------------------------------------------------------------------
+	task.spawn(function()
+		-- Ladebalken füllt sich über 2.5 Sekunden
+		local fillTween = ts:Create(barFill, TweenInfo.new(2.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, 0, 1, 0)
+		})
+		fillTween:Play()
+		fillTween.Completed:Wait()
+		
+		task.wait(0.2) -- Kurze Atempause für die Ästhetik
+
+		-- Loading Screen ausfaden
+		local fadeLoad = ts:Create(loadingFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			GroupTransparency = 1
+		})
+		fadeLoad:Play()
+		fadeLoad.Completed:Wait()
+		loadingFrame:Destroy()
+
+		-- Hauptfenster einfaden (Und Interaktivität freischalten)
+		main.Interactable = true
+		ts:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			GroupTransparency = 0
+		}):Play()
+		ts:Create(mainStroke, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			Transparency = theme.WindowStrokeTransparency
+		}):Play()
+	end)
 
 	return sections
 end
