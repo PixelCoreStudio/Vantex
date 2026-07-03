@@ -1,9 +1,8 @@
 --[[
-    VoidLib Custom UI Library - Complete & Fixed Version
-    - FIXED: 'reg' function missing error (Line 264 / image_4b66bc.png)
-    - FIXED: Configuration saving now correctly maps .Enable / .Enabled
-    - FIXED: Key System now properly ensures folder structure exists
-    - FIXED: Discord RPC Invite System (Rayfield Style)
+    VoidLib Custom UI Library - Final Stable Version
+    - FIXED: 'reg' function missing error
+    - FIXED: Tween:Wait() changed to Tween.Completed:Wait()
+    - FIXED: Black loading box issue (Added missing fadeTween:Play() and instant Destroy)
 ]]
 
 local module = {}
@@ -56,7 +55,6 @@ local function create(class, props)
 	return inst
 end
 
--- Hier ist die reparierte Farb-Registrierungs-Funktion!
 local function reg(instance, property, themeKey)
 	if instance and module.Theme[themeKey] then
 		instance[property] = module.Theme[themeKey]
@@ -786,7 +784,11 @@ function module:win(config)
 		ts:Create(barFill, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
 		ts:Create(loadStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
 
+		-- FIXED: Added explicit Play() call for fadeTween so it doesn't get stuck anymore!
+		fadeTween:Play()
 		fadeTween.Completed:Wait()
+		
+		-- FIXED: Instant cleanup to ensure the black box from image_4b7583.png vanishes entirely
 		loadingFrame:Destroy()
 	end)
 
