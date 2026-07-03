@@ -1,8 +1,9 @@
 --[[
-    Customizable UI Library - Fixed Config Saving & Added Discord
-    - FIXED: Configuration saving now correctly checks for .Enable or .Enabled
-    - FIXED: Key System now properly ensures the folder exists before saving the key
-    - ADDED: Discord invite fix v1
+    VoidLib Custom UI Library - Complete & Fixed Version
+    - FIXED: 'reg' function missing error (Line 264 / image_4b66bc.png)
+    - FIXED: Configuration saving now correctly maps .Enable / .Enabled
+    - FIXED: Key System now properly ensures folder structure exists
+    - FIXED: Discord RPC Invite System (Rayfield Style)
 ]]
 
 local module = {}
@@ -55,6 +56,13 @@ local function create(class, props)
 	return inst
 end
 
+-- Hier ist die reparierte Farb-Registrierungs-Funktion!
+local function reg(instance, property, themeKey)
+	if instance and module.Theme[themeKey] then
+		instance[property] = module.Theme[themeKey]
+	end
+end
+
 local function checkText(val)
 	if type(val) == "table" then
 		return tostring(val.Name or val.Text or val[1] or "Unknown")
@@ -85,10 +93,9 @@ function module:win(config)
 	screenGui.Parent = hui and hui() or cg
 
 	-------------------------------------------------------------------
-	-- CONFIGURATION SAVING SYSTEM (FIXED)
+	-- CONFIGURATION SAVING SYSTEM
 	-------------------------------------------------------------------
 	local cfgSettings = config.ConfigurationSaving or { Enabled = false }
-	-- Akzeptiere sowohl .Enable als auch .Enabled aus deiner Config
 	local isSavingEnabled = (cfgSettings.Enabled == true or cfgSettings.Enable == true)
 	
 	local savedData = {}
@@ -122,22 +129,19 @@ function module:win(config)
 
 	if isDiscordEnabled and discordSettings.Invite then
 		task.spawn(function()
-			-- 1. Extrahiere den reinen Code aus der URL (falls eine ganze URL übergeben wurde)
 			local inviteCode = tostring(discordSettings.Invite)
 				:gsub("https://discord.gg/", "")
 				:gsub("http://discord.gg/", "")
 				:gsub("discord.gg/", "")
 				:gsub("https://discord.com/invite/", "")
-				:gsub("/", "") -- Entfernt restliche Schrägstriche
+				:gsub("/", "")
 
 			local inviteFolderName = folderName .. "/Discord Invites"
 			
-			-- 2. Ordner für Discord Invites erstellen falls nötig
 			if makefolder and isfolder and not isfolder(inviteFolderName) then
 				makefolder(inviteFolderName)
 			end
 
-			-- 3. Überprüfen, ob dieser spezifische Invite bereits geschickt wurde
 			local fileCheckPath = inviteFolderName .. "/" .. inviteCode .. ".txt"
 			local launchInvite = true
 			
@@ -145,7 +149,6 @@ function module:win(config)
 				launchInvite = false
 			end
 
-			-- 4. Wenn neu, an die Discord App via RPC senden
 			if launchInvite then
 				local requestFunc = request or syn.request or http.request or (http and http.request)
 				if requestFunc then
@@ -160,13 +163,12 @@ function module:win(config)
 							Body = hs:JSONEncode({
 								cmd = "INVITE_BROWSER",
 								nonce = hs:GenerateGUID(false),
-								args = { code = inviteCode } -- Hier MUSS der reine Code stehen, keine URL!
+								args = { code = inviteCode }
 							})
 						})
 					end)
 				end
 				
-				-- 5. Wenn RememberJoins aktiv ist, merken wir uns genau diesen Invite-Code
 				if discordSettings.RememberJoins and writefile then
 					writefile(fileCheckPath, "VoidLib RememberJoins is true for this invite, this invite will not ask you to join again")
 				end
@@ -175,7 +177,7 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- KEY SYSTEM (FIXED)
+	-- KEY SYSTEM
 	-------------------------------------------------------------------
 	if config.KeySystem then
 		local keySettings = config.KeySettings or {}
@@ -198,7 +200,6 @@ function module:win(config)
 		end
 
 		local keyPassed = false
-		-- Stelle sicher, dass der Ordner existiert, falls ConfigSaving aus war, aber KeySaving an ist
 		if makefolder and isfolder and not isfolder(folderName) then
 			makefolder(folderName)
 		end
@@ -785,7 +786,7 @@ function module:win(config)
 		ts:Create(barFill, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
 		ts:Create(loadStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
 
-		fadeTween:Play(); fadeTween.Completed:Wait()
+		fadeTween:Wait()
 		loadingFrame:Destroy()
 	end)
 
