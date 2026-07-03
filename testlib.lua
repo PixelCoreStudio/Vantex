@@ -2,7 +2,7 @@
     Customizable UI Library - Fixed Config Saving & Added Discord
     - FIXED: Configuration saving now correctly checks for .Enable or .Enabled
     - FIXED: Key System now properly ensures the folder exists before saving the key
-    - ADDED: Discord invite system (prompts join on load if enabled)
+    - ADDED: Discord invite fix v1
 ]]
 
 local module = {}
@@ -115,42 +115,60 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- DISCORD SYSTEM (NEU)
+	-- DISCORD SYSTEM (RAYFIELD STYLE)
 	-------------------------------------------------------------------
 	local discordSettings = config.Discord or { Enable = false }
-	if (discordSettings.Enable or discordSettings.Enabled) and discordSettings.Invite then
+	local isDiscordEnabled = (discordSettings.Enable == true or discordSettings.Enabled == true)
+
+	if isDiscordEnabled and discordSettings.Invite then
 		task.spawn(function()
-			local inviteCode = tostring(discordSettings.Invite):gsub("https://discord.gg/", ""):gsub("discord.gg/", "")
+			-- 1. Extrahiere den reinen Code aus der URL (falls eine ganze URL übergeben wurde)
+			local inviteCode = tostring(discordSettings.Invite)
+				:gsub("https://discord.gg/", "")
+				:gsub("http://discord.gg/", "")
+				:gsub("discord.gg/", "")
+				:gsub("https://discord.com/invite/", "")
+				:gsub("/", "") -- Entfernt restliche Schrägstriche
+
+			local inviteFolderName = folderName .. "/Discord Invites"
 			
-			-- Falls RememberJoins false ist (oder die Join-Datei noch nicht existiert), feuern wir den Invite ab
-			local launchInvite = true
-			if discordSettings.RememberJoins and isfolder and isfile and isfolder(folderName) then
-				if isfile(folderName .. "/discord_joined.txt") then
-					launchInvite = false
-				end
+			-- 2. Ordner für Discord Invites erstellen falls nötig
+			if makefolder and isfolder and not isfolder(inviteFolderName) then
+				makefolder(inviteFolderName)
 			end
 
+			-- 3. Überprüfen, ob dieser spezifische Invite bereits geschickt wurde
+			local fileCheckPath = inviteFolderName .. "/" .. inviteCode .. ".txt"
+			local launchInvite = true
+			
+			if isfile and isfile(fileCheckPath) then
+				launchInvite = false
+			end
+
+			-- 4. Wenn neu, an die Discord App via RPC senden
 			if launchInvite then
-				if request or syn and syn.request or http and http.request then
-					local req = request or syn.request or http.request
-					pcall(req, {
-						Url = "http://127.0.0.1:6463/rpc?v=1",
-						Method = "POST",
-						Headers = {
-							["Content-Type"] = "application/json",
-							["Origin"] = "https://discord.com"
-						},
-						Body = hs:JSONEncode({
-							cmd = "INVITE_BROWSER",
-							args = { code = inviteCode },
-							nonce = hs:GenerateGUID(false)
+				local requestFunc = request or syn.request or http.request or (http and http.request)
+				if requestFunc then
+					pcall(function()
+						requestFunc({
+							Url = "http://127.0.0.1:6463/rpc?v=1",
+							Method = "POST",
+							Headers = {
+								["Content-Type"] = "application/json",
+								["Origin"] = "https://discord.com"
+							},
+							Body = hs:JSONEncode({
+								cmd = "INVITE_BROWSER",
+								nonce = hs:GenerateGUID(false),
+								args = { code = inviteCode } -- Hier MUSS der reine Code stehen, keine URL!
+							})
 						})
-					})
+					end)
 				end
 				
-				-- Wenn sich die Library das merken soll, Datei erstellen
-				if discordSettings.RememberJoins and writefile and isfolder and isfolder(folderName) then
-					writefile(folderName .. "/discord_joined.txt", "true")
+				-- 5. Wenn RememberJoins aktiv ist, merken wir uns genau diesen Invite-Code
+				if discordSettings.RememberJoins and writefile then
+					writefile(fileCheckPath, "VoidLib RememberJoins is true for this invite, this invite will not ask you to join again")
 				end
 			end
 		end)
