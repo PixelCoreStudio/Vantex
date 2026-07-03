@@ -1,8 +1,6 @@
 --[[
-    VoidLib Custom UI Library - Final Stable Version
-    - FIXED: 'reg' function missing error
-    - FIXED: Tween:Wait() changed to Tween.Completed:Wait()
-    - FIXED: Black loading box issue (Added missing fadeTween:Play() and instant Destroy)
+    VoidLib Custom UI Library - Final Finished Version
+    - ADDED: Lucide Icon Support for Topbar Icon & Mobile Button
 ]]
 
 local module = {}
@@ -68,12 +66,30 @@ local function checkText(val)
 	return tostring(val or "")
 end
 
+-- Hilfsfunktion für Lucide Icons
+local function getIconAsset(iconInput)
+	if not iconInput or iconInput == 0 or iconInput == "" then return nil end
+	if typeof(iconInput) == "number" then
+		return "rbxassetid://" .. tostring(iconInput)
+	elseif typeof(iconInput) == "string" then
+		if iconInput:match("^rbxassetid://") or iconInput:match("^http") then
+			return iconInput
+		else
+			-- Generiert eine gültige URL aus dem Lucide-Namen (z.B. "eye", "settings")
+			return "https://lucide.dev/api/icons/" .. string.lower(iconInput)
+		end
+	end
+	return nil
+end
+
 function module:win(config)
 	config = type(config) == "table" and config or {}
 	
 	local title = checkText(config.Name or "Custom Interface Suite")
 	local loadingTitle = checkText(config.LoadingTitle or title)
 	local loadingSubtitle = checkText(config.LoadingSubtitle or "Loading assets...")
+	local topbarIcon = config.Icon or 0
+	local showTextString = checkText(config.ShowText or "VoidLib")
 	
 	local theme = {}
 	for k, v in pairs(module.Theme) do theme[k] = v end
@@ -120,7 +136,7 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- DISCORD SYSTEM (RAYFIELD STYLE)
+	-- DISCORD SYSTEM
 	-------------------------------------------------------------------
 	local discordSettings = config.Discord or { Enable = false }
 	local isDiscordEnabled = (discordSettings.Enable == true or discordSettings.Enabled == true)
@@ -168,7 +184,7 @@ function module:win(config)
 				end
 				
 				if discordSettings.RememberJoins and writefile then
-					writefile(fileCheckPath, "VoidLib RememberJoins is true for this invite, this invite will not ask you to join again")
+					writefile(fileCheckPath, "VoidLib RememberJoins is true for this invite...")
 				end
 			end
 		end)
@@ -273,7 +289,18 @@ function module:win(config)
 	local topbarLine = create("Frame", { Name = "accentline", Parent = topbar, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 1), BorderSizePixel = 0, BackgroundTransparency = 0.55 })
 	reg(topbarLine, "BackgroundColor3", "Accent")
 
-	local titleLbl = create("TextLabel", { Name = "title", Parent = topbar, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(1, -90, 1, 0), Text = title, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left })
+	-------------------------------------------------------------------
+	-- TOPBAR ICON (With Lucide / Asset Support)
+	-------------------------------------------------------------------
+	local textOffset = 12
+	local finalIconAsset = getIconAsset(topbarIcon)
+	if finalIconAsset then
+		local iconLabel = create("ImageLabel", { Name = "TopbarIcon", Parent = topbar, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.new(0, 20, 0, 20), Image = finalIconAsset })
+		reg(iconLabel, "ImageColor3", "Text")
+		textOffset = 38
+	end
+
+	local titleLbl = create("TextLabel", { Name = "title", Parent = topbar, BackgroundTransparency = 1, Position = UDim2.new(0, textOffset, 0, 0), Size = UDim2.new(1, -(textOffset + 80), 1, 0), Text = title, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left })
 	reg(titleLbl, "TextColor3", "Text")
 	reg(titleLbl, "Font", "FontBold")
 
@@ -282,6 +309,38 @@ function module:win(config)
 		if typeof(config.ToggleUIKeybind) == "EnumItem" then toggleKey = config.ToggleUIKeybind
 		elseif type(config.ToggleUIKeybind) == "string" and #config.ToggleUIKeybind == 1 then pcall(function() toggleKey = Enum.KeyCode[config.ToggleUIKeybind:upper()] end) end
 	end
+
+	-------------------------------------------------------------------
+	-- MOBILE RE-OPEN BUTTON (With Lucide / Text Adaptive Support)
+	-------------------------------------------------------------------
+	local mobileBtn = create("TextButton", { Name = "MobileOpenButton", Parent = screenGui, Size = UDim2.new(0, 100, 0, 32), Position = UDim2.new(1, -115, 1, -45), AutoButtonColor = false, Text = "", Visible = false })
+	reg(mobileBtn, "BackgroundColor3", "Topbar")
+	create("UICorner", { Parent = mobileBtn, CornerRadius = UDim.new(0, 6) })
+	local mobileStroke = create("UIStroke", { Parent = mobileBtn, Thickness = 1, Transparency = 0.5 })
+	reg(mobileStroke, "Color", "Accent")
+
+	-- Prüft, ob ShowText ein Lucide-Icon-String ist. Wenn nicht, wird normaler Text gerendert.
+	local mobileIconAsset = (showTextString ~= "Rayfield" and showTextString ~= "VoidLib") and getIconAsset(showTextString) or nil
+	if mobileIconAsset then
+		mobileBtn.Size = UDim2.new(0, 36, 0, 36) -- Quadratisch für Icons
+		mobileBtn.Position = UDim2.new(1, -50, 1, -50)
+		local mobileIconImg = create("ImageLabel", { Parent = mobileBtn, Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(0.5, -10, 0.5, -10), BackgroundTransparency = 1, Image = mobileIconAsset })
+		reg(mobileIconImg, "ImageColor3", "Text")
+	else
+		mobileBtn.Text = showTextString
+		reg(mobileBtn, "TextColor3", "Text")
+		reg(mobileBtn, "Font", "FontBold")
+		mobileBtn.TextSize = 13
+	end
+
+	local function setUIVisibility(visible)
+		main.Visible = visible
+		mobileBtn.Visible = not visible
+	end
+
+	mobileBtn.MouseButton1Click:Connect(function()
+		setUIVisibility(true)
+	end)
 
 	local btns = create("Frame", { Name = "btns", Parent = topbar, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(0, 60, 0, 24) })
 	create("UIListLayout", { Parent = btns, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center, HorizontalAlignment = Enum.HorizontalAlignment.Right })
@@ -307,9 +366,11 @@ function module:win(config)
 	local minimizeBtn = makeTopbarBtn("-")
 	local closeBtn = makeTopbarBtn("X")
 
-	minimizeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
+	minimizeBtn.MouseButton1Click:Connect(function() setUIVisibility(false) end)
 	local toggleKeyConn = ui.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == toggleKey then main.Visible = not main.Visible end
+		if not processed and input.KeyCode == toggleKey then 
+			setUIVisibility(not main.Visible)
+		end
 	end)
 	closeBtn.MouseButton1Click:Connect(function() toggleKeyConn:Disconnect(); screenGui:Destroy() end)
 
@@ -372,12 +433,13 @@ function module:win(config)
 		reg(indicator, "BackgroundColor3", "Accent")
 		create("UICorner", { Parent = indicator, CornerRadius = UDim.new(1, 0) })
 
-		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, (icon and icon ~= "") and 36 or 12, 0, 0), Size = UDim2.new(1, (icon and icon ~= "") and -44 or -20, 1, 0), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+		local tabIconAsset = getIconAsset(icon)
+		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, tabIconAsset and 36 or 12, 0, 0), Size = UDim2.new(1, tabIconAsset and -44 or -20, 1, 0), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
 		reg(label, "TextColor3", "Text")
 		reg(label, "Font", "Font")
 
-		if icon and icon ~= "" then
-			local iconLbl = create("ImageLabel", { Parent = btn, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 18, 0, 18), Image = icon })
+		if tabIconAsset then
+			local iconLbl = create("ImageLabel", { Parent = btn, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 18, 0, 18), Image = tabIconAsset })
 			reg(iconLbl, "ImageColor3", "SubText")
 		end
 
@@ -784,11 +846,9 @@ function module:win(config)
 		ts:Create(barFill, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
 		ts:Create(loadStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
 
-		-- FIXED: Added explicit Play() call for fadeTween so it doesn't get stuck anymore!
 		fadeTween:Play()
 		fadeTween.Completed:Wait()
 		
-		-- FIXED: Instant cleanup to ensure the black box from image_4b7583.png vanishes entirely
 		loadingFrame:Destroy()
 	end)
 
