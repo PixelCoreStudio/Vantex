@@ -1,9 +1,7 @@
 --[[
-    Customizable UI Library - Full Fixed Version
-    - Fixed: Slider rendering and tracking
-    - Fixed: Dropdown instant population (Supports your syntax without manual update)
-    - Fixed: Keybind fully integrated as a native method
-    - Added: Configuration Saving & Full URL Discord Invite Handler
+    Customizable UI Library - Fully Fixed Version 2.0
+    - FIXED: Keybind now successfully passes the pressed key to your callback function!
+    - FIXED: Discord Invite logic robustified with safe patterns and console logging.
 ]]
 
 local module = {}
@@ -106,7 +104,7 @@ function module:win(config)
 		end
 		if isfile(folderName .. "/" .. fileName) then
 			pcall(function()
-				savedData = hs:JSONDecode(readfile(folderName .. "/" .. fileName))
+				savedData = hs:JSONEncode(readfile(folderName .. "/" .. fileName))
 			end)
 		end
 	end
@@ -120,28 +118,40 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- DISCORD INVITE SYSTEM
+	-- DISCORD INVITE SYSTEM (DEBUGGED)
 	-------------------------------------------------------------------
 	local discordSettings = config.Discord or { Enabled = false }
 	if discordSettings.Enabled and discordSettings.Invite and discordSettings.Invite ~= "noinvitelink" then
 		local shouldPrompt = true
 		if discordSettings.RememberJoins and isfile and readfile then
 			if isfile(folderName .. "/discord_joined.txt") then
+				print("[UI Library]: Discord Invite übersprungen (RememberJoins ist aktiv).")
 				shouldPrompt = false
 			end
 		end
 
 		if shouldPrompt then
 			task.spawn(function()
-				local rawInput = discordSettings.Invite
-				local inviteCode = rawInput:gsub("https://discord.gg/", ""):gsub("http://discord.gg/", ""):gsub("discord.gg/", ""):gsub("https://discord.com/invite/", ""):gsub("http://discord.com/invite/", "")
-				inviteCode = inviteCode:match("^%s*(.-)%s*$")
+				local rawInput = tostring(discordSettings.Invite)
+				print("[UI Library]: Verarbeite Discord-Link: " .. rawInput)
+				
+				-- Sicheres Extrahieren des Codes ohne fehleranfällige Pattern-Trims
+				local inviteCode = rawInput
+					:gsub("https://discord.gg/", "")
+					:gsub("http://discord.gg/", "")
+					:gsub("discord.gg/", "")
+					:gsub("https://discord.com/invite/", "")
+					:gsub("http://discord.com/invite/", "")
+					:gsub("%s+", "") -- Entfernt alle Leerzeichen komplett
+
+				print("[UI Library]: Extrahierter Code für RPC: " .. inviteCode)
 
 				local fullUrl = "https://discord.gg/" .. inviteCode
 				local http_request = request or (syn and syn.request) or (http and http.request)
 				
 				if http_request then
-					local success, _ = pcall(function()
+					print("[UI Library]: Sende POST an lokalen Discord-Client...")
+					local success, response = pcall(function()
 						return http_request({
 							Url = "http://127.0.0.1:6463/rpc?v=1",
 							Method = "POST",
@@ -150,13 +160,20 @@ function module:win(config)
 						})
 					end)
 
-					if not success then
-						pcall(function() http_request({ Url = fullUrl, Method = "GET" }) end)
+					if not success or (response and response.StatusCode ~= 200) then
+						print("[UI Library]: RPC fehlgeschlagen oder Desktop App zu. Nutze Browser-Fallback...")
+						pcall(function() 
+							http_request({ Url = fullUrl, Method = "GET" }) 
+						end)
+					else
+						print("[UI Library]: Discord App hat den Invite erfolgreich empfangen!")
 					end
 
 					if discordSettings.RememberJoins and writefile then
 						writefile(folderName .. "/discord_joined.txt", "true")
 					end
+				else
+					warn("[UI Library]: Executor unterstützt keine HTTP-Requests (request/syn.request fehlt)!")
 				end
 			end)
 		end
@@ -707,7 +724,8 @@ function module:win(config)
 					end
 				else
 					if not processed and currentKey ~= "None" and input.KeyCode.Name == currentKey then
-						if cb then pcall(cb) end
+						-- HIER REPARIERT: ÜBERGIBT NUN DIE TASTE AN DAS CALLBACK
+						if cb then pcall(cb, currentKey) end
 					end
 				end
 			end)
