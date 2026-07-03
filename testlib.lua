@@ -2,7 +2,8 @@
     Customizable UI Library - Rayfield-Style Update
     Fixed: ToggleUIKeybind dynamic key registration
     Fixed: Independent Loading Screen Overlay (No CanvasGroup bug)
-    Added: VoidCore Logo integration on Loading Screen
+    Added: VoidCore Logo integration on Loading Screen (Asset: 140071513873333)
+    Added: Configuration Saving, Discord Invite Prompt & Key System
 ]]
 
 local module = {}
@@ -10,6 +11,7 @@ local module = {}
 local ts = cloneref(game:GetService("TweenService"))
 local cg = cloneref(game:GetService("CoreGui"))
 local ui = cloneref(game:GetService("UserInputService"))
+local hs = cloneref(game:GetService("HttpService"))
 
 module.Theme = {
 	Font = Enum.Font.GothamMedium,
@@ -38,8 +40,8 @@ module.Theme = {
 	StrokeHoverTransparency = 0.35,
 	WindowStrokeTransparency = 0.45,
 
-	WindowSize = UDim2.new(0, 550, 0, 350), -- Feste, saubere Fenstergröße
-	WindowPosition = UDim2.new(0.5, -275, 0.5, -175), -- Zentriert auf dem Bildschirm
+	WindowSize = UDim2.new(0, 550, 0, 350),
+	WindowPosition = UDim2.new(0.5, -275, 0.5, -175),
 
 	TopbarHeight = 40,
 	TabBarWidth = 130,
@@ -68,18 +70,7 @@ function module:win(config)
 	local loadingTitle = checkText(config.LoadingTitle or title)
 	local loadingSubtitle = checkText(config.LoadingSubtitle or "Loading assets...")
 	
-	-- Keybind dynamisch zuweisen
-	local toggleKey = Enum.KeyCode.K
-	if config.ToggleUIKeybind then
-		if typeof(config.ToggleUIKeybind) == "EnumItem" then
-			toggleKey = config.ToggleUIKeybind
-		elseif type(config.ToggleUIKeybind) == "string" and #config.ToggleUIKeybind == 1 then
-			pcall(function()
-				toggleKey = Enum.KeyCode[config.ToggleUIKeybind:upper()]
-			end)
-		end
-	end
-
+	-- Theme setup
 	local theme = {}
 	for k, v in pairs(module.Theme) do theme[k] = v end
 	if config.ThemeOverrides then
@@ -103,6 +94,165 @@ function module:win(config)
 	screenGui.Parent = hui and hui() or cg
 
 	-------------------------------------------------------------------
+	-- CONFIGURATION SAVING SYSTEM
+	-------------------------------------------------------------------
+	local cfgSettings = config.ConfigurationSaving or { Enabled = false }
+	local savedData = {}
+	local folderName = cfgSettings.FolderName or "CustomUILogs"
+	local fileName = (cfgSettings.FileName or "Big Hub") .. ".json"
+
+	if cfgSettings.Enabled and writefile and readfile and isfolder and makefolder then
+		if not isfolder(folderName) then
+			makefolder(folderName)
+		end
+		if isfile(folderName .. "/" .. fileName) then
+			pcall(function()
+				savedData = hs:JSONDecode(readfile(folderName .. "/" .. fileName))
+			end)
+		end
+	end
+
+	local function saveConfig()
+		if cfgSettings.Enabled and writefile then
+			pcall(function()
+				writefile(folderName .. "/" .. fileName, hs:JSONEncode(savedData))
+			end)
+		end
+	end
+
+	-------------------------------------------------------------------
+	-- DISCORD INVITE SYSTEM
+	-------------------------------------------------------------------
+	local discordSettings = config.Discord or { Enabled = false }
+	if discordSettings.Enabled and request and discordSettings.Invite and discordSettings.Invite ~= "noinvitelink" then
+		local shouldPrompt = true
+		if discordSettings.RememberJoins and isfile and readfile and writefile then
+			if isfile(folderName .. "/discord_joined.txt") then
+				shouldPrompt = false
+			end
+		end
+
+		if shouldPrompt then
+			task.spawn(function()
+				pcall(function()
+					request({
+						Url = "http://127.0.0.1:6463/rpc?v=1",
+						Method = "POST",
+						Headers = {
+							["Content-Type"] = "application/json",
+							["Origin"] = "https://discord.com"
+						},
+						Body = hs:JSONEncode({
+							cmd = "INVITE_BROWSER",
+							args = { code = discordSettings.Invite },
+							nonce = hs:GenerateGUID(false)
+						})
+					})
+					if discordSettings.RememberJoins and writefile then
+						writefile(folderName .. "/discord_joined.txt", "true")
+					end
+				end)
+			end)
+		end
+	end
+
+	-------------------------------------------------------------------
+	-- KEY SYSTEM (Wird vor allem anderen ausgeführt)
+	-------------------------------------------------------------------
+	if config.KeySystem then
+		local keySettings = config.KeySettings or {}
+		local keyTitle = keySettings.Title or "Untitled"
+		local keySubtitle = keySettings.Subtitle or "Key System"
+		local keyNote = keySettings.Note or "No method of obtaining the key is provided"
+		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
+		local validKeys = keySettings.Key or {"Hello"}
+
+		if keySettings.GrabKeyFromSite and keySettings.Key and type(keySettings.Key) == "string" then
+			pcall(function()
+				local success, res = pcall(game.HttpGet, game, keySettings.Key)
+				if success then
+					validKeys = {}
+					for line in res:gmatch("[^\r\n]+") do
+						table.insert(validKeys, line)
+					end
+				end
+			end)
+		end
+
+		local keyPassed = false
+		if keySettings.SaveKey and isfile and readfile and isfile(folderName .. "/" .. keyFileName) then
+			local savedKey = readfile(folderName .. "/" .. keyFileName)
+			for _, k in ipairs(validKeys) do
+				if savedKey == k then
+					keyPassed = true
+					break
+				end
+			end
+		end
+
+		if not keyPassed then
+			local keyFrame = create("Frame", {
+				Name = "KeySystemOverlay",
+				Parent = screenGui,
+				Size = UDim2.new(0, 350, 0, 240),
+				Position = UDim2.new(0.5, -175, 0.5, -120),
+				BorderSizePixel = 0,
+				ZIndex = 20,
+			})
+			reg(keyFrame, "BackgroundColor3", "Background")
+			create("UICorner", { Parent = keyFrame, CornerRadius = theme.CornerRadius })
+			local kStroke = create("UIStroke", { Parent = keyFrame, Thickness = 1, Transparency = theme.WindowStrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+			reg(kStroke, "Color", "Accent")
+
+			create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 15), Size = UDim2.new(1, 0, 0, 25), Text = keyTitle, TextSize = 18, TextColor3 = theme.Text, Font = theme.FontBold })
+			create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 40), Size = UDim2.new(1, 0, 0, 20), Text = keySubtitle, TextSize = 13, TextColor3 = theme.SubText, Font = theme.Font })
+			
+			local noteLbl = create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 65), Size = UDim2.new(1, -40, 0, 40), Text = keyNote, TextSize = 11, TextColor3 = theme.SubText, Font = theme.Font, TextWrapped = true })
+			
+			local inputBg = create("Frame", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 115), Size = UDim2.new(1, -40, 0, 36) })
+			reg(inputBg, "BackgroundColor3", "ElementBg")
+			create("UICorner", { Parent = inputBg, CornerRadius = theme.ElementRadius })
+			
+			local keyInput = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 10, 0, 0), Text = "", PlaceholderText = "Enter Key...", TextSize = 14, TextColor3 = theme.Text, Font = theme.Font, ClearTextOnFocus = false })
+			
+			local checkBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 170), Size = UDim2.new(1, -40, 0, 36), Text = "Check Key", TextSize = 14, AutoButtonColor = false })
+			reg(checkBtn, "BackgroundColor3", "Accent")
+			reg(checkBtn, "TextColor3", "Text")
+			reg(checkBtn, "Font", "FontBold")
+			create("UICorner", { Parent = checkBtn, CornerRadius = theme.ElementRadius })
+
+			checkBtn.MouseButton1Click:Connect(function()
+				local text = keyInput.Text
+				local match = false
+				for _, k in ipairs(validKeys) do
+					if text == k then match = true; break end
+				end
+				if match then
+					if keySettings.SaveKey and writefile then
+						writefile(folderName .. "/" .. keyFileName, text)
+					end
+					keyPassed = true
+					ts:Create(keyFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, 260), Position = UDim2.new(0.5, -185, 0.5, -130) }):Play()
+					for _, child in ipairs(keyFrame:GetChildren()) do
+						if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("TextButton") then
+							ts:Create(child, TweenInfo.new(0.2), { Transparency = 1 }):Play()
+						end
+					end
+					task.wait(0.3)
+					keyFrame:Destroy()
+				else
+					keyInput.Text = ""
+					keyInput.PlaceholderText = "Invalid Key! Try Again."
+					noteLbl.TextColor3 = Color3.fromRGB(255, 50, 50)
+					task.delay(2, function() noteLbl.TextColor3 = theme.SubText end)
+				end
+			end)
+
+			while not keyPassed do task.wait(0.1) end
+		end
+	end
+
+	-------------------------------------------------------------------
 	-- MAIN UI WINDOW (Startet unsichtbar hinter dem Ladebildschirm)
 	-------------------------------------------------------------------
 	local main = create("Frame", {
@@ -112,7 +262,7 @@ function module:win(config)
 		Position = theme.WindowPosition,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Visible = false, -- Wird erst nach dem Loading sichtbar
+		Visible = false,
 	})
 	reg(main, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = main, CornerRadius = theme.CornerRadius })
@@ -158,6 +308,18 @@ function module:win(config)
 	})
 	reg(titleLbl, "TextColor3", "Text")
 	reg(titleLbl, "Font", "FontBold")
+
+	-- Dynamic Toggle Key registration[cite: 1]
+	local toggleKey = Enum.KeyCode.K
+	if config.ToggleUIKeybind then
+		if typeof(config.ToggleUIKeybind) == "EnumItem" then
+			toggleKey = config.ToggleUIKeybind
+		elseif type(config.ToggleUIKeybind) == "string" and #config.ToggleUIKeybind == 1 then
+			pcall(function()
+				toggleKey = Enum.KeyCode[config.ToggleUIKeybind:upper()]
+			end)
+		end
+	end
 
 	local btns = create("Frame", {
 		Name = "btns",
@@ -447,10 +609,13 @@ function module:win(config)
 			return btnEl
 		end
 
-		function contents:toggle(text, default, cb)
+		function contents:toggle(text, id, default, cb)
 			text = checkText(text)
+			id = tostring(id or text)
 			if type(default) == "function" then cb = default; default = false end
+			
 			local toggled = default and true or false
+			if savedData[id] ~= nil then toggled = savedData[id] end
 
 			local holder = create("TextButton", {
 				Parent = section,
@@ -491,12 +656,7 @@ function module:win(config)
 			})
 			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
 
-			local trackGlow = create("UIStroke", {
-				Parent = track,
-				Thickness = 1,
-				Transparency = 0.6,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			})
+			local trackGlow = create("UIStroke", { Parent = track, Thickness = 1, Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 			reg(trackGlow, "Color", "Accent")
 
 			local knob = create("Frame", {
@@ -538,18 +698,23 @@ function module:win(config)
 
 			holder.MouseButton1Click:Connect(function()
 				toggled = not toggled
+				savedData[id] = toggled
+				saveConfig()
 				applyVisual(true)
 				if cb then cb(toggled) end
 			end)
 
-			if toggled and cb then task.defer(cb, toggled) end
+			if cb then task.defer(cb, toggled) end
 			return holder
 		end
 
-		function contents:textbox(text, default, cb)
+		function contents:textbox(text, id, default, cb)
 			text = checkText(text)
+			id = tostring(id or text)
 			if type(default) == "function" then cb = default; default = "" end
-			default = checkText(default)
+			
+			local currentText = checkText(default)
+			if savedData[id] ~= nil then currentText = tostring(savedData[id]) end
 
 			local holder = create("Frame", {
 				Parent = section,
@@ -559,45 +724,18 @@ function module:win(config)
 			reg(holder, "BackgroundColor3", "ElementBg")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
-			local lbl = create("TextLabel", {
-				Parent = holder,
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0, 0),
-				Size = UDim2.new(0.5, -12, 1, 0),
-				Text = text,
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			})
+			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.5, -12, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
 			reg(lbl, "TextColor3", "Text")
 			reg(lbl, "Font", "Font")
 
-			local inputBg = create("Frame", {
-				Parent = holder,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -8, 0.5, 0),
-				Size = UDim2.new(0.45, 0, 0, 24),
-			})
+			local inputBg = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(0.45, 0, 0, 24) })
 			reg(inputBg, "BackgroundColor3", "ElementHoverBg")
 			create("UICorner", { Parent = inputBg, CornerRadius = UDim.new(0, 6) })
 
-			local focusGlow = create("UIStroke", {
-				Parent = inputBg,
-				Thickness = 1,
-				Transparency = theme.StrokeTransparency,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			})
+			local focusGlow = create("UIStroke", { Parent = inputBg, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 			reg(focusGlow, "Color", "Accent")
 
-			local input = create("TextBox", {
-				Parent = inputBg,
-				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -10, 1, 0),
-				Position = UDim2.new(0, 5, 0, 0),
-				Text = default or "",
-				PlaceholderText = "...",
-				TextSize = 13,
-				ClearTextOnFocus = false,
-			})
+			local input = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 5, 0, 0), Text = currentText, PlaceholderText = "...", TextSize = 13, ClearTextOnFocus = false })
 			reg(input, "TextColor3", "Text")
 			reg(input, "Font", "Font")
 
@@ -605,66 +743,43 @@ function module:win(config)
 				ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play()
 			end)
 
-			if default and default ~= "" and cb then task.defer(cb, default) end
+			if cb then task.defer(cb, currentText) end
 
 			input.FocusLost:Connect(function(enterPressed)
 				ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
-				if enterPressed and cb then cb(input.Text) end
+				savedData[id] = input.Text
+				saveConfig()
+				if cb then cb(input.Text) end
 			end)
 
 			return holder
 		end
 
-		function contents:slider(text, min, max, default, cb)
+		function contents:slider(text, id, min, max, default, cb)
 			text = checkText(text)
-			local holder = create("Frame", {
-				Parent = section,
-				Size = UDim2.new(1, 0, 0, theme.ElementHeight + 14),
-				BackgroundTransparency = theme.ElementTransparency,
-			})
+			id = tostring(id or text)
+			
+			local valStart = default
+			if savedData[id] ~= nil then valStart = tonumber(savedData[id]) or default end
+
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight + 14), BackgroundTransparency = theme.ElementTransparency })
 			reg(holder, "BackgroundColor3", "ElementBg")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
-			local lbl = create("TextLabel", {
-				Parent = holder,
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0, 4),
-				Size = UDim2.new(1, -24, 0, 18),
-				Text = text .. " : " .. tostring(default),
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			})
+			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 4), Size = UDim2.new(1, -24, 0, 18), Text = text .. " : " .. tostring(valStart), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
 			reg(lbl, "TextColor3", "Text")
 			reg(lbl, "Font", "Font")
 
-			local track = create("Frame", {
-				Parent = holder,
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 28),
-				Size = UDim2.new(1, -24, 0, 6),
-				BorderSizePixel = 0,
-			})
+			local track = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 28), Size = UDim2.new(1, -24, 0, 6), BorderSizePixel = 0 })
 			reg(track, "BackgroundColor3", "ElementHoverBg")
 			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
 
-			local fill = create("Frame", {
-				Parent = track,
-				Size = UDim2.new(0, 0, 1, 0),
-				BorderSizePixel = 0,
-			})
+			local fill = create("Frame", { Parent = track, Size = UDim2.new(0, 0, 1, 0), BorderSizePixel = 0 })
 			reg(fill, "BackgroundColor3", "Accent")
 			create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
 
-			local fillGlow = create("UIStroke", {
-				Parent = fill,
-				Thickness = 1,
-				Transparency = 0.3,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			})
-			reg(fillGlow, "Color", "Accent")
-
 			local dragging = false
-			local lastVal = default
+			local lastVal = valStart
 
 			local function setFromAlpha(alpha)
 				alpha = math.clamp(alpha, 0, 1)
@@ -679,7 +794,7 @@ function module:win(config)
 				setFromAlpha(rel)
 			end
 
-			setFromAlpha((default - min) / (max - min))
+			setFromAlpha((valStart - min) / (max - min))
 
 			track.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -697,127 +812,66 @@ function module:win(config)
 			ui.InputEnded:Connect(function(input)
 				if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 					dragging = false
+					savedData[id] = lastVal
+					saveConfig()
 					if cb then pcall(cb, lastVal) end
 				end
 			end)
 
+			if cb then task.defer(cb, lastVal) end
 			return holder
 		end
 
-		function contents:dropdown(text, list, default, cb)
+		function contents:dropdown(text, id, list, default, cb)
 			text = checkText(text)
+			id = tostring(id or text)
 			list = type(list) == "table" and list or {}
 			if type(default) == "function" then cb = default; default = nil end
 
 			local open = false
 			local currentSelected = default or (list[1] or "...")
+			if savedData[id] ~= nil then currentSelected = savedData[id] end
 
-			local holder = create("Frame", {
-				Parent = section,
-				Size = UDim2.new(1, 0, 0, theme.ElementHeight),
-				BackgroundTransparency = theme.ElementTransparency,
-				ClipsDescendants = true,
-			})
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency, ClipsDescendants = true })
 			reg(holder, "BackgroundColor3", "ElementBg")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
-			local hoverGlow = create("UIStroke", {
-				Parent = holder,
-				Thickness = 1,
-				Transparency = theme.StrokeTransparency,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			})
+			local hoverGlow = create("UIStroke", { Parent = holder, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 			reg(hoverGlow, "Color", "Accent")
 
-			local trigger = create("TextButton", {
-				Parent = holder,
-				Size = UDim2.new(1, 0, 0, theme.ElementHeight),
-				BackgroundTransparency = 1,
-				AutoButtonColor = false,
-				Text = "",
-			})
-
-			local lbl = create("TextLabel", {
-				Parent = trigger,
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0, 0),
-				Size = UDim2.new(0.5, -12, 1, 0),
-				Text = text,
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			})
+			local trigger = create("TextButton", { Parent = holder, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+			local lbl = create("TextLabel", { Parent = trigger, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.5, -12, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
 			reg(lbl, "TextColor3", "Text")
 			reg(lbl, "Font", "Font")
 
-			local selectedLbl = create("TextLabel", {
-				Parent = trigger,
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0.5, 0, 0, 0),
-				Size = UDim2.new(0.5, -30, 1, 0),
-				Text = tostring(currentSelected),
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Right,
-			})
+			local selectedLbl = create("TextLabel", { Parent = trigger, BackgroundTransparency = 1, Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, -30, 1, 0), Text = tostring(currentSelected), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right })
 			reg(selectedLbl, "TextColor3", "SubText")
 			reg(selectedLbl, "Font", "Font")
 
-			local indicator = create("TextLabel", {
-				Parent = trigger,
-				BackgroundTransparency = 1,
-				Position = UDim2.new(1, -24, 0, 0),
-				Size = UDim2.new(0, 20, 1, 0),
-				Text = "V",
-				TextSize = 10,
-				TextXAlignment = Enum.TextXAlignment.Center,
-			})
+			local indicator = create("TextLabel", { Parent = trigger, BackgroundTransparency = 1, Position = UDim2.new(1, -24, 0, 0), Size = UDim2.new(0, 20, 1, 0), Text = "V", TextSize = 10, TextXAlignment = Enum.TextXAlignment.Center })
 			reg(indicator, "TextColor3", "SubText")
 			reg(indicator, "Font", "FontBold")
 
-			local container = create("ScrollingFrame", {
-				Parent = holder,
-				Position = UDim2.new(0, 6, 0, theme.ElementHeight),
-				Size = UDim2.new(1, -12, 0, 0),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				ScrollBarThickness = 2,
-				CanvasSize = UDim2.new(0, 0, 0, 0),
-				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			})
+			local container = create("ScrollingFrame", { Parent = holder, Position = UDim2.new(0, 6, 0, theme.ElementHeight), Size = UDim2.new(1, -12, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y })
 			reg(container, "ScrollBarImageColor3", "Accent")
-			local layout = create("UIListLayout", { Parent = container, Padding = UDim.new(0, 4) })
+			create("UIListLayout", { Parent = container, Padding = UDim.new(0, 4) })
 			create("UIPadding", { Parent = container, PaddingBottom = UDim.new(0, 4) })
 
 			local function updateOptions()
-				for _, child in ipairs(container:GetChildren()) do
-					if child:IsA("TextButton") then child:Destroy() end
-				end
-
+				for _, child in ipairs(container:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
 				for _, val in ipairs(list) do
 					local optionStr = tostring(val)
-					local opt = create("TextButton", {
-						Parent = container,
-						Size = UDim2.new(1, 0, 0, theme.ElementHeight - 6),
-						BackgroundTransparency = theme.ElementTransparency,
-						BackgroundColor3 = theme.ElementHoverBg,
-						Text = optionStr,
-						TextSize = 12,
-						AutoButtonColor = false,
-					})
+					local opt = create("TextButton", { Parent = container, Size = UDim2.new(1, 0, 0, theme.ElementHeight - 6), BackgroundTransparency = theme.ElementTransparency, BackgroundColor3 = theme.ElementHoverBg, Text = optionStr, TextSize = 12, AutoButtonColor = false })
 					reg(opt, "TextColor3", "Text")
 					reg(opt, "Font", "Font")
 					create("UICorner", { Parent = opt, CornerRadius = UDim.new(0, 4) })
-
-					opt.MouseEnter:Connect(function()
-						ts:Create(opt, TweenInfo.new(0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { TextColor3 = theme.Accent }):Play()
-					end)
-					opt.MouseLeave:Connect(function()
-						ts:Create(opt, TweenInfo.new(0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { TextColor3 = theme.Text }):Play()
-					end)
 
 					opt.MouseButton1Click:Connect(function()
 						currentSelected = val
 						selectedLbl.Text = optionStr
 						open = false
+						savedData[id] = val
+						saveConfig()
 						ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
 						ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, -12, 0, 0) }):Play()
 						indicator.Text = "V"
@@ -825,118 +879,19 @@ function module:win(config)
 					end)
 				end
 			end
-
 			updateOptions()
-
-			trigger.MouseEnter:Connect(function()
-				ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
-				ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play()
-			end)
-			trigger.MouseLeave:Connect(function()
-				ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play()
-				ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
-			end)
 
 			trigger.MouseButton1Click:Connect(function()
 				open = not open
 				local maxItems = math.min(#list, 4)
 				local targetContainerHeight = maxItems * (theme.ElementHeight - 2)
-				local targetHolderHeight = theme.ElementHeight + targetContainerHeight + 6
-
-				ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-					Size = open and UDim2.new(1, 0, 0, targetHolderHeight) or UDim2.new(1, 0, 0, theme.ElementHeight)
-				}):Play()
-				ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-					Size = open and UDim2.new(1, -12, 0, targetContainerHeight) or UDim2.new(1, -12, 0, 0)
-				}):Play()
-
+				ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = open and UDim2.new(1, 0, 0, theme.ElementHeight + targetContainerHeight + 6) or UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
+				ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = open and UDim2.new(1, -12, 0, targetContainerHeight) or UDim2.new(1, -12, 0, 0) }):Play()
 				indicator.Text = open and "^" or "V"
 			end)
 
-			local dapi = {}
-			function dapi:Refresh(newList, newDefault)
-				list = newList or {}
-				if newDefault then
-					currentSelected = newDefault
-					selectedLbl.Text = tostring(newDefault)
-				end
-				updateOptions()
-			end
-			return dapi
-		end
-
-		function contents:keybind(text, default, cb)
-			text = checkText(text)
-			local currentBind = typeof(default) == "EnumItem" and default or nil
-			local binding = false
-
-			local holder = create("Frame", {
-				Parent = section,
-				Size = UDim2.new(1, 0, 0, theme.ElementHeight),
-				BackgroundTransparency = theme.ElementTransparency,
-			})
-			reg(holder, "BackgroundColor3", "ElementBg")
-			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
-
-			local hoverGlow = create("UIStroke", {
-				Parent = holder,
-				Thickness = 1,
-				Transparency = theme.StrokeTransparency,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			})
-			reg(hoverGlow, "Color", "Accent")
-
-			local lbl = create("TextLabel", {
-				Parent = holder,
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0, 0),
-				Size = UDim2.new(0.6, -12, 1, 0),
-				Text = text,
-				TextSize = 13,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			})
-			reg(lbl, "TextColor3", "Text")
-			reg(lbl, "Font", "Font")
-
-			local btn = create("TextButton", {
-				Parent = holder,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -8, 0.5, 0),
-				Size = UDim2.new(0.3, 0, 0, 24),
-				Text = currentBind and currentBind.Name or "NONE",
-				TextSize = 12,
-				AutoButtonColor = false,
-			})
-			reg(btn, "BackgroundColor3", "ElementHoverBg")
-			reg(btn, "TextColor3", "SubText")
-			reg(btn, "Font", "Font")
-			create("UICorner", { Parent = btn, CornerRadius = UDim.new(0, 6) })
-
-			btn.MouseButton1Click:Connect(function()
-				if binding then return end
-				binding = true
-				btn.Text = "..."
-				reg(btn, "TextColor3", "Accent")
-			end)
-
-			ui.InputBegan:Connect(function(input, processed)
-				if processed then return end
-				if binding then
-					if input.UserInputType == Enum.UserInputType.Keyboard then
-						binding = false
-						currentBind = input.KeyCode
-						btn.Text = currentBind.Name
-						reg(btn, "TextColor3", "SubText")
-						if cb then cb(currentBind) end
-					end
-				else
-					if currentBind and input.KeyCode == currentBind then
-						if cb then cb(currentBind) end
-					end
-				end
-			end)
-
-			return holder
+			if cb then task.defer(cb, currentSelected) end
+			return { Refresh = function(_, nl, nd) list = nl or {}; if nd then currentSelected = nd; selectedLbl.Text = tostring(nd) end; updateOptions() end }
 		end
 
 		return contents
@@ -951,20 +906,15 @@ function module:win(config)
 		Size = theme.WindowSize,
 		Position = theme.WindowPosition,
 		BorderSizePixel = 0,
-		ZIndex = 10, -- Liegt über allem anderen
+		ZIndex = 10,
 	})
 	reg(loadingFrame, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = loadingFrame, CornerRadius = theme.CornerRadius })
 	
-	local loadStroke = create("UIStroke", {
-		Parent = loadingFrame,
-		Thickness = 1,
-		Transparency = theme.WindowStrokeTransparency,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-	})
+	local loadStroke = create("UIStroke", { Parent = loadingFrame, Thickness = 1, Transparency = theme.WindowStrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 	reg(loadStroke, "Color", "Accent")
 
-	-- DAS BRANDING LOGO (Zentriert im oberen Bereich)
+	-- BRANDING LOGO (Neue Asset-ID)
 	local loadLogo = create("ImageLabel", {
 		Name = "VoidCoreLogo",
 		Parent = loadingFrame,
@@ -975,48 +925,23 @@ function module:win(config)
 		Image = "rbxassetid://140071513873333",
 	})
 
-	-- Titel & Untertitel leicht nach unten verschoben, um dem Logo Platz zu machen
-	local loadTitleLbl = create("TextLabel", {
-		Parent = loadingFrame,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 160),
-		Size = UDim2.new(1, 0, 0, 30),
-		Text = loadingTitle,
-		TextSize = 22,
-	})
+	local loadTitleLbl = create("TextLabel", { Parent = loadingFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 160), Size = UDim2.new(1, 0, 0, 30), Text = loadingTitle, TextSize = 22 })
 	reg(loadTitleLbl, "TextColor3", "Text")
 	reg(loadTitleLbl, "Font", "FontBold")
 
-	local loadSubLbl = create("TextLabel", {
-		Parent = loadingFrame,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 195),
-		Size = UDim2.new(1, 0, 0, 20),
-		Text = loadingSubtitle,
-		TextSize = 13,
-	})
+	local loadSubLbl = create("TextLabel", { Parent = loadingFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 195), Size = UDim2.new(1, 0, 0, 20), Text = loadingSubtitle, TextSize = 13 })
 	reg(loadSubLbl, "TextColor3", "SubText")
 	reg(loadSubLbl, "Font", "Font")
 
-	local barBg = create("Frame", {
-		Parent = loadingFrame,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 250),
-		Size = UDim2.new(0.7, 0, 0, 4),
-		BorderSizePixel = 0,
-	})
+	local barBg = create("Frame", { Parent = loadingFrame, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 250), Size = UDim2.new(0.7, 0, 0, 4), BorderSizePixel = 0 })
 	reg(barBg, "BackgroundColor3", "ElementBg")
 	create("UICorner", { Parent = barBg, CornerRadius = UDim.new(1, 0) })
 
-	local barFill = create("Frame", {
-		Parent = barBg,
-		Size = UDim2.new(0, 0, 1, 0),
-		BorderSizePixel = 0,
-	})
+	local barFill = create("Frame", { Parent = barBg, Size = UDim2.new(0, 0, 1, 0), BorderSizePixel = 0 })
 	reg(barFill, "BackgroundColor3", "Accent")
 	create("UICorner", { Parent = barFill, CornerRadius = UDim.new(1, 0) })
 
-	-- Optionaler feiner Pulsieren-Effekt für das Logo während des Ladevorgangs
+	-- Logo Pulsieren-Effekt
 	task.spawn(function()
 		while loadingFrame and loadingFrame.Parent do
 			local pulseOut = ts:Create(loadLogo, TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Size = UDim2.new(0, 116, 0, 116), Position = UDim2.new(0.5, 0, 0, 32) })
@@ -1029,25 +954,16 @@ function module:win(config)
 		end
 	end)
 
-	-- LAUFENDE LOADING ANIMATION
+	-- Loading Animation
 	task.spawn(function()
-		local fillTween = ts:Create(barFill, TweenInfo.new(2.2, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, 0, 1, 0)
-		})
+		local fillTween = ts:Create(barFill, TweenInfo.new(2.2, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 1, 0) })
 		fillTween:Play()
 		fillTween.Completed:Wait()
 		task.wait(0.2)
 
-		-- Schaltet das Hauptfenster ein, bevor das Overlay verschwindet
 		main.Visible = true
 
-		-- Verschwinden des Loading Screens animieren
-		local fadeTween = ts:Create(loadingFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundTransparency = 1,
-			Size = theme.WindowSize + UDim2.new(0, 40, 0, 40), -- Vergrößert sich leicht beim Ausfaden
-			Position = theme.WindowPosition - UDim2.new(0, 20, 0, 20)
-		})
-		
+		local fadeTween = ts:Create(loadingFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = theme.WindowSize + UDim2.new(0, 40, 0, 40), Position = theme.WindowPosition - UDim2.new(0, 20, 0, 20) })
 		ts:Create(loadLogo, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
 		ts:Create(loadTitleLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
 		ts:Create(loadSubLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
