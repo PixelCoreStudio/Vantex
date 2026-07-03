@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-		- New V1
+    - Fixed Keybind hold
 ]]
 
 local module = {}
@@ -926,7 +926,13 @@ function module:win(config)
 
 		function contents:keybind(text, id, default, cb, opts)
 			text = checkText(text)
-			if typeof(id) == "EnumItem" or type(id) == "string" then cb = default; default = id; id = text end
+			if typeof(id) == "EnumItem" then
+				-- old-style call: keybind(text, defaultKeyEnum, callback)
+				cb = default; default = id; id = text
+			elseif type(id) == "string" and type(default) == "function" and cb == nil then
+				-- old-style call: keybind(text, "F", callback) -- no explicit id given
+				cb = default; default = id; id = text
+			end
 			id = tostring(id)
 			opts = type(opts) == "table" and opts or {}
 			local holdToInteract = opts.HoldToInteract == true
