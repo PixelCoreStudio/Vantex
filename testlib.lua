@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Fixed Keybind hold
+    - Added divider
 ]]
 
 local module = {}
@@ -1171,6 +1171,19 @@ function module:win(config)
 			end
 			return colorPickerObj
 		end
+		function contents:CreateDivider()
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, 9), BackgroundTransparency = 1 })
+			local line = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 1), BorderSizePixel = 0, BackgroundTransparency = 0.85 })
+			reg(line, "BackgroundColor3", "SubText")
+
+			local dividerObj = { Instance = holder }
+			function dividerObj:Set(visible)
+				holder.Visible = (visible ~= false)
+			end
+			return dividerObj
+		end
+		contents.Divider = contents.CreateDivider
+
 		contents.ColorPicker = contents.CreateColorPicker
 		contents.Paragraph = contents.CreateParagraph
 
