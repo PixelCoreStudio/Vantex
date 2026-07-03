@@ -4,6 +4,7 @@
     Fixed: Independent Loading Screen Overlay (No CanvasGroup bug)
     Added: VoidCore Logo integration on Loading Screen (Asset: 140071513873333)
     Added: Configuration Saving, Discord Invite Prompt & Key System
+	Added: Discord fix 1
 ]]
 
 local module = {}
