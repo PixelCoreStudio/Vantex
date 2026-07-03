@@ -2,6 +2,7 @@
     Customizable UI Library - Rayfield-Style Update
     Fixed: ToggleUIKeybind dynamic key registration
     Fixed: Independent Loading Screen Overlay (No CanvasGroup bug)
+    Added: VoidCore Logo integration on Loading Screen
 ]]
 
 local module = {}
@@ -212,7 +213,6 @@ function module:win(config)
 		setOpen(false)
 	end)
 
-	-- FUNKTIONIERENDER KEYBIND (Nutzt die korrekte `toggleKey`-Variable aus der Config)
 	local toggleKeyConn = ui.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == toggleKey then
 			setOpen(not main.Visible)
@@ -943,7 +943,7 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
-	-- SEPARATER SEITENÜBERGREIFENDER LOADING SCREEN OVERLAY
+	-- SEPARATER SEITENÜBERGREIFENDER LOADING SCREEN OVERLAY (With Logo)
 	-------------------------------------------------------------------
 	local loadingFrame = create("Frame", {
 		Name = "LoadingOverlay",
@@ -964,10 +964,22 @@ function module:win(config)
 	})
 	reg(loadStroke, "Color", "Accent")
 
+	-- DAS BRANDING LOGO (Zentriert im oberen Bereich)
+	local loadLogo = create("ImageLabel", {
+		Name = "VoidCoreLogo",
+		Parent = loadingFrame,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 35),
+		Size = UDim2.new(0, 110, 0, 110),
+		Image = "rbxassetid://140071513873333",
+	})
+
+	-- Titel & Untertitel leicht nach unten verschoben, um dem Logo Platz zu machen
 	local loadTitleLbl = create("TextLabel", {
 		Parent = loadingFrame,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0.3, 0),
+		Position = UDim2.new(0, 0, 0, 160),
 		Size = UDim2.new(1, 0, 0, 30),
 		Text = loadingTitle,
 		TextSize = 22,
@@ -978,7 +990,7 @@ function module:win(config)
 	local loadSubLbl = create("TextLabel", {
 		Parent = loadingFrame,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0.3, 35),
+		Position = UDim2.new(0, 0, 0, 195),
 		Size = UDim2.new(1, 0, 0, 20),
 		Text = loadingSubtitle,
 		TextSize = 13,
@@ -989,7 +1001,7 @@ function module:win(config)
 	local barBg = create("Frame", {
 		Parent = loadingFrame,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.7, 0),
+		Position = UDim2.new(0.5, 0, 0, 250),
 		Size = UDim2.new(0.7, 0, 0, 4),
 		BorderSizePixel = 0,
 	})
@@ -1003,6 +1015,19 @@ function module:win(config)
 	})
 	reg(barFill, "BackgroundColor3", "Accent")
 	create("UICorner", { Parent = barFill, CornerRadius = UDim.new(1, 0) })
+
+	-- Optionaler feiner Pulsieren-Effekt für das Logo während des Ladevorgangs
+	task.spawn(function()
+		while loadingFrame and loadingFrame.Parent do
+			local pulseOut = ts:Create(loadLogo, TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Size = UDim2.new(0, 116, 0, 116), Position = UDim2.new(0.5, 0, 0, 32) })
+			local pulseIn = ts:Create(loadLogo, TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Size = UDim2.new(0, 110, 0, 110), Position = UDim2.new(0.5, 0, 0, 35) })
+			pulseOut:Play()
+			pulseOut.Completed:Wait()
+			if not loadingFrame or not loadingFrame.Parent then break end
+			pulseIn:Play()
+			pulseIn.Completed:Wait()
+		end
+	end)
 
 	-- LAUFENDE LOADING ANIMATION
 	task.spawn(function()
@@ -1023,6 +1048,7 @@ function module:win(config)
 			Position = theme.WindowPosition - UDim2.new(0, 20, 0, 20)
 		})
 		
+		ts:Create(loadLogo, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
 		ts:Create(loadTitleLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
 		ts:Create(loadSubLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
 		ts:Create(barBg, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
