@@ -786,7 +786,7 @@ function module:win(config)
 		ts:Create(barFill, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
 		ts:Create(loadStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
 
-		fadeTween:Wait()
+		fadeTween.Completed:Wait()
 		loadingFrame:Destroy()
 	end)
 
