@@ -162,6 +162,92 @@ local function makeDraggable(dragFrame, clickFrame)
 	end)
 end
 
+-------------------------------------------------------------------
+-- GLOBAL NOTIFICATION SYSTEM
+-------------------------------------------------------------------
+local notifyGui = nil
+local notifyHolder = nil
+local notifyCount = 0
+
+local function ensureNotifyGui()
+	if notifyGui and notifyGui.Parent then return end
+	local hui = gethui or get_hidden_gui or nil
+	notifyGui = create("ScreenGui", {
+		Name = "CustomUI_Notifications",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 999,
+	})
+	notifyGui.Parent = hui and hui() or cg
+
+	notifyHolder = create("Frame", { Name = "holder", Parent = notifyGui, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.new(0, 280, 1, -32), BackgroundTransparency = 1 })
+	create("UIListLayout", { Parent = notifyHolder, VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder })
+end
+
+function module:Notify(config)
+	config = type(config) == "table" and config or {}
+	local theme = module.Theme
+	local notifTitle = checkText(config.Title or "Notification")
+	local notifContent = checkText(config.Content or "")
+	local duration = tonumber(config.Duration) or 4
+	local image = config.Image
+
+	ensureNotifyGui()
+
+	local hasIcon = image ~= nil and image ~= 0 and image ~= ""
+
+	notifyCount = notifyCount + 1
+	local card = create("Frame", { Parent = notifyHolder, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ClipsDescendants = true, LayoutOrder = notifyCount })
+	reg(card, "BackgroundColor3", "Background")
+
+	local cardStroke = create("UIStroke", { Parent = card, Thickness = 1, Transparency = theme.WindowStrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	reg(cardStroke, "Color", "Accent")
+	create("UICorner", { Parent = card, CornerRadius = theme.CornerRadius })
+	create("UIPadding", { Parent = card, PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) })
+
+	local textOffset = 0
+	if hasIcon then
+		local iconImg = create("ImageLabel", { Parent = card, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(0, 22, 0, 22) })
+		reg(iconImg, "ImageColor3", "Accent")
+		task.spawn(function()
+			while not Icons do task.wait(0.1) end
+			applyIconToLabel(iconImg, image)
+		end)
+		textOffset = 30
+	end
+
+	local titleLbl = create("TextLabel", { Parent = card, BackgroundTransparency = 1, Position = UDim2.new(0, textOffset, 0, 0), Size = UDim2.new(1, -textOffset, 0, 16), Text = notifTitle, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y })
+	reg(titleLbl, "TextColor3", "Text")
+	reg(titleLbl, "Font", "FontBold")
+
+	local contentLbl = create("TextLabel", { Parent = card, BackgroundTransparency = 1, Position = UDim2.new(0, textOffset, 0, 20), Size = UDim2.new(1, -textOffset, 0, 16), Text = notifContent, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y })
+	reg(contentLbl, "TextColor3", "SubText")
+	reg(contentLbl, "Font", "Font")
+
+	card.BackgroundTransparency = 1
+	cardStroke.Transparency = 1
+	titleLbl.TextTransparency = 1
+	contentLbl.TextTransparency = 1
+
+	ts:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.PanelTransparency }):Play()
+	ts:Create(cardStroke, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.WindowStrokeTransparency }):Play()
+	ts:Create(titleLbl, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
+	ts:Create(contentLbl, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
+
+	task.delay(duration, function()
+		if not card or not card.Parent then return end
+		local fadeOut = ts:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { BackgroundTransparency = 1 })
+		ts:Create(cardStroke, TweenInfo.new(0.3), { Transparency = 1 }):Play()
+		ts:Create(titleLbl, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+		ts:Create(contentLbl, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+		fadeOut:Play()
+		fadeOut.Completed:Wait()
+		card:Destroy()
+	end)
+
+	return card
+end
+
 function module:win(config)
 	config = type(config) == "table" and config or {}
 	
@@ -504,13 +590,51 @@ function module:win(config)
 
 		local contents = {}
 
-		function contents:label(text)
+		function contents:label(text, icon)
 			text = checkText(text)
-			local lbl = create("TextLabel", { Parent = section, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true })
-			reg(lbl, "TextColor3", "SubText")
-			reg(lbl, "Font", "Font")
-			return lbl
+			local holder = create("Frame", { Parent = section, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20) })
+
+			local iconLbl = create("ImageLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0.5, -8), Size = UDim2.new(0, 16, 0, 16), Visible = false })
+			reg(iconLbl, "ImageColor3", "SubText")
+
+			local textLbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true })
+			reg(textLbl, "TextColor3", "SubText")
+			reg(textLbl, "Font", "Font")
+
+			local function applyIcon(ic)
+				if ic and applyIconToLabel(iconLbl, ic) then
+					iconLbl.Visible = true
+					textLbl.Position = UDim2.new(0, 22, 0, 0)
+					textLbl.Size = UDim2.new(1, -22, 1, 0)
+				else
+					iconLbl.Visible = false
+					textLbl.Position = UDim2.new(0, 0, 0, 0)
+					textLbl.Size = UDim2.new(1, 0, 1, 0)
+				end
+			end
+
+			if icon then
+				task.spawn(function()
+					while not Icons do task.wait(0.1) end
+					applyIcon(icon)
+				end)
+			end
+
+			local labelObj = { Instance = holder }
+			function labelObj:Set(newTitle, newIcon, newColor, ignoreTheme)
+				if newTitle ~= nil then textLbl.Text = checkText(newTitle) end
+				if newIcon ~= nil then applyIcon(newIcon) end
+				if newColor ~= nil then
+					textLbl.TextColor3 = newColor
+					iconLbl.ImageColor3 = newColor
+				elseif not ignoreTheme then
+					reg(textLbl, "TextColor3", "SubText")
+					reg(iconLbl, "ImageColor3", "SubText")
+				end
+			end
+			return labelObj
 		end
+		contents.CreateLabel = contents.label
 
 		function contents:button(text, cb)
 			text = checkText(text)
@@ -526,7 +650,12 @@ function module:win(config)
 			btnEl.MouseEnter:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
 			btnEl.MouseLeave:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
 			btnEl.MouseButton1Click:Connect(cb)
-			return btnEl
+
+			local btnObj = { Instance = btnEl }
+			function btnObj:Set(newText)
+				btnEl.Text = checkText(newText)
+			end
+			return btnObj
 		end
 
 		function contents:toggle(text, id, default, cb)
@@ -584,16 +713,28 @@ function module:win(config)
 				applyVisual(true)
 				if cb then cb(toggled) end
 			end)
-			return holder
+
+			local toggleObj = { Instance = holder }
+			function toggleObj:Set(newVal, silent)
+				toggled = newVal and true or false
+				savedData[id] = toggled
+				saveConfig()
+				applyVisual(true)
+				if cb and not silent then cb(toggled) end
+			end
+			return toggleObj
 		end
 
-		function contents:textbox(text, id, default, cb)
+		function contents:textbox(text, id, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "string" and type(default) == "string" and type(cb) == "nil" then id = text end
 			if type(id) == "function" then cb = id; default = ""; id = text end
 			if type(default) == "function" then cb = default; default = id; id = text end
 			id = tostring(id)
-			
+			opts = type(opts) == "table" and opts or {}
+			local placeholderText = opts.PlaceholderText or "..."
+			local removeAfterFocusLost = opts.RemoveTextAfterFocusLost == true
+
 			local currentText = checkText(default)
 			if savedData[id] ~= nil then currentText = tostring(savedData[id]) end
 
@@ -612,7 +753,7 @@ function module:win(config)
 			local focusGlow = create("UIStroke", { Parent = inputBg, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 			reg(focusGlow, "Color", "Accent")
 
-			local input = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 5, 0, 0), Text = currentText, PlaceholderText = "...", TextSize = 13, ClearTextOnFocus = false })
+			local input = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 5, 0, 0), Text = currentText, PlaceholderText = placeholderText, TextSize = 13, ClearTextOnFocus = false })
 			reg(input, "TextColor3", "Text")
 			reg(input, "Font", "Font")
 
@@ -622,8 +763,18 @@ function module:win(config)
 				savedData[id] = input.Text
 				saveConfig()
 				if cb then cb(input.Text) end
+				if removeAfterFocusLost then input.Text = "" end
 			end)
-			return holder
+
+			local textboxObj = { Instance = holder }
+			function textboxObj:Set(newText, silent)
+				newText = checkText(newText)
+				input.Text = newText
+				savedData[id] = newText
+				saveConfig()
+				if cb and not silent then cb(newText) end
+			end
+			return textboxObj
 		end
 
 		function contents:slider(text, id, min, max, default, cb)
@@ -690,7 +841,18 @@ function module:win(config)
 				local denom = (max - min)
 				setFromAlpha(denom > 0 and ((valStart - min) / denom) or 0)
 			end)
-			return holder
+
+			local sliderObj = { Instance = holder }
+			function sliderObj:Set(newVal, silent)
+				local denom = (max - min)
+				local clampedVal = math.clamp(tonumber(newVal) or min, min, max)
+				local alpha = denom > 0 and ((clampedVal - min) / denom) or 0
+				setFromAlpha(alpha)
+				savedData[id] = lastVal
+				saveConfig()
+				if cb and not silent then pcall(cb, lastVal) end
+			end
+			return sliderObj
 		end
 
 		function contents:dropdown(text, id, list, default, cb)
@@ -765,11 +927,13 @@ function module:win(config)
 			return { Refresh = function(_, nl, nd) list = nl or {}; if nd then currentSelected = nd; selectedLbl.Text = tostring(nd) end; updateOptions() end }
 		end
 
-		function contents:keybind(text, id, default, cb)
+		function contents:keybind(text, id, default, cb, opts)
 			text = checkText(text)
 			if typeof(id) == "EnumItem" or type(id) == "string" then cb = default; default = id; id = text end
 			id = tostring(id)
-			
+			opts = type(opts) == "table" and opts or {}
+			local holdToInteract = opts.HoldToInteract == true
+
 			local currentKey = default
 			if typeof(currentKey) == "EnumItem" then currentKey = currentKey.Name
 			elseif type(currentKey) ~= "string" then currentKey = "None" end
@@ -802,6 +966,7 @@ function module:win(config)
 				ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeHoverTransparency }):Play()
 			end)
 
+			local holding = false
 			local inputConn
 			inputConn = ui.InputBegan:Connect(function(input, processed)
 				if not screenGui or not screenGui.Parent then inputConn:Disconnect(); return end
@@ -822,12 +987,189 @@ function module:win(config)
 					end
 				else
 					if not processed and currentKey ~= "None" and input.KeyCode.Name == currentKey then
-						if cb then pcall(cb, currentKey) end
+						if holdToInteract then
+							if not holding then
+								holding = true
+								if cb then pcall(cb, true) end
+							end
+						else
+							if cb then pcall(cb, currentKey) end
+						end
 					end
 				end
 			end)
-			return holder
+
+			if holdToInteract then
+				ui.InputEnded:Connect(function(input)
+					if holding and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == currentKey then
+						holding = false
+						if cb then pcall(cb, false) end
+					end
+				end)
+			end
+
+			local keybindObj = { Instance = holder }
+			function keybindObj:Set(newKey, silent)
+				if typeof(newKey) == "EnumItem" then newKey = newKey.Name
+				elseif type(newKey) ~= "string" then newKey = "None" end
+				currentKey = newKey
+				bindBtn.Text = currentKey
+				savedData[id] = currentKey
+				saveConfig()
+			end
+			return keybindObj
 		end
+
+		function contents:CreateParagraph(config)
+			config = type(config) == "table" and config or {}
+			local pTitle = checkText(config.Title or "")
+			local pContent = checkText(config.Content or "")
+
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = theme.ElementTransparency })
+			reg(holder, "BackgroundColor3", "ElementBg")
+			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+			create("UIPadding", { Parent = holder, PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) })
+			create("UIListLayout", { Parent = holder, Padding = UDim.new(0, 4) })
+
+			local titleLbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Text = pTitle, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 })
+			reg(titleLbl, "TextColor3", "Text")
+			reg(titleLbl, "Font", "FontBold")
+
+			local contentLbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Text = pContent, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 2 })
+			reg(contentLbl, "TextColor3", "SubText")
+			reg(contentLbl, "Font", "Font")
+
+			local paragraphObj = { Instance = holder }
+			function paragraphObj:Set(newConfig)
+				newConfig = type(newConfig) == "table" and newConfig or {}
+				if newConfig.Title ~= nil then titleLbl.Text = checkText(newConfig.Title) end
+				if newConfig.Content ~= nil then contentLbl.Text = checkText(newConfig.Content) end
+			end
+			return paragraphObj
+		end
+
+		function contents:CreateColorPicker(config)
+			config = type(config) == "table" and config or {}
+			local cName = checkText(config.Name or "Color")
+			local id = tostring(config.Flag or cName)
+			local cb = config.Callback
+
+			local currentColor = typeof(config.Color) == "Color3" and config.Color or Color3.fromRGB(255, 255, 255)
+			if savedData[id] ~= nil and type(savedData[id]) == "table" then
+				local c = savedData[id]
+				pcall(function() currentColor = Color3.fromRGB(c[1] or 255, c[2] or 255, c[3] or 255) end)
+			end
+
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency, ClipsDescendants = true })
+			reg(holder, "BackgroundColor3", "ElementBg")
+			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
+
+			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.6, -12, 0, theme.ElementHeight), Text = cName, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+			reg(lbl, "TextColor3", "Text")
+			reg(lbl, "Font", "Font")
+
+			local swatch = create("TextButton", { Parent = holder, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0, theme.ElementHeight / 2), Size = UDim2.new(0, 40, 0, 22), BackgroundColor3 = currentColor, AutoButtonColor = false, Text = "" })
+			create("UICorner", { Parent = swatch, CornerRadius = UDim.new(0, 6) })
+			local swatchStroke = create("UIStroke", { Parent = swatch, Thickness = 1, Transparency = 0.4 })
+			reg(swatchStroke, "Color", "Accent")
+
+			local panel = create("Frame", { Parent = holder, Position = UDim2.new(0, 8, 0, theme.ElementHeight + 4), Size = UDim2.new(1, -16, 0, 0), BackgroundTransparency = 1 })
+			create("UIListLayout", { Parent = panel, Padding = UDim.new(0, 6) })
+
+			local sliders = {}
+			local channels = { { key = "R", label = "R" }, { key = "G", label = "G" }, { key = "B", label = "B" } }
+
+			local function currentRGB()
+				return math.floor(currentColor.R * 255 + 0.5), math.floor(currentColor.G * 255 + 0.5), math.floor(currentColor.B * 255 + 0.5)
+			end
+
+			local updatingInternally = false
+
+			local function applyColor(newColor, fireCb)
+				currentColor = newColor
+				swatch.BackgroundColor3 = currentColor
+				local r, g, b = currentRGB()
+				savedData[id] = { r, g, b }
+				saveConfig()
+				if fireCb and cb then pcall(cb, currentColor) end
+			end
+
+			for _, chDef in ipairs(channels) do
+				local row = create("Frame", { Parent = panel, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1 })
+				local chLbl = create("TextLabel", { Parent = row, BackgroundTransparency = 1, Size = UDim2.new(0, 16, 1, 0), Text = chDef.label, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left })
+				reg(chLbl, "TextColor3", "SubText")
+				reg(chLbl, "Font", "Font")
+
+				local track = create("Frame", { Parent = row, Position = UDim2.new(0, 20, 0.5, -3), Size = UDim2.new(1, -20, 0, 6), BorderSizePixel = 0 })
+				reg(track, "BackgroundColor3", "ElementHoverBg")
+				create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
+
+				local fill = create("Frame", { Parent = track, Size = UDim2.new(0, 0, 1, 0), BorderSizePixel = 0 })
+				reg(fill, "BackgroundColor3", "Accent")
+				create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
+
+				local dragging = false
+				local function setAlpha(alpha)
+					alpha = math.clamp(alpha, 0, 1)
+					fill.Size = UDim2.new(alpha, 0, 1, 0)
+					if updatingInternally then return end
+					local r, g, b = currentRGB()
+					local val = math.floor(alpha * 255 + 0.5)
+					if chDef.key == "R" then r = val elseif chDef.key == "G" then g = val else b = val end
+					applyColor(Color3.fromRGB(r, g, b), false)
+				end
+
+				track.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = true
+						setAlpha((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X)
+					end
+				end)
+				ui.InputChanged:Connect(function(input)
+					if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+						setAlpha((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X)
+					end
+				end)
+				ui.InputEnded:Connect(function(input)
+					if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+						dragging = false
+						savedData[id] = { currentRGB() }
+						saveConfig()
+						if cb then pcall(cb, currentColor) end
+					end
+				end)
+
+				sliders[chDef.key] = setAlpha
+			end
+
+			local function refreshSliders()
+				updatingInternally = true
+				local r, g, b = currentRGB()
+				sliders.R(r / 255)
+				sliders.G(g / 255)
+				sliders.B(b / 255)
+				updatingInternally = false
+			end
+			task.defer(refreshSliders)
+
+			local expanded = false
+			swatch.MouseButton1Click:Connect(function()
+				expanded = not expanded
+				local panelHeight = expanded and (#channels * 30) or 0
+				ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, theme.ElementHeight + (expanded and (panelHeight + 12) or 0)) }):Play()
+				ts:Create(panel, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, -16, 0, panelHeight) }):Play()
+			end)
+
+			local colorPickerObj = { Instance = holder }
+			function colorPickerObj:Set(newColor, silent)
+				if typeof(newColor) ~= "Color3" then return end
+				applyColor(newColor, not silent)
+				refreshSliders()
+			end
+			return colorPickerObj
+		end
+		contents.ColorPicker = contents.CreateColorPicker
+		contents.Paragraph = contents.CreateParagraph
 
 		return contents
 	end
