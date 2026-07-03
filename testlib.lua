@@ -1,9 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Rayfield-Lucide Spritesheet Support (Topbar, Tabs & Mobile Button)
-    - Fully Draggable Mobile Button & Main Window
-    - Configuration Saving & Auto-Load System
-    - Built-in Discord Invite & Key System Handles
+		- New V1
 ]]
 
 local module = {}
