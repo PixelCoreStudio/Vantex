@@ -1,6 +1,9 @@
 --[[
-    VoidLib Custom UI Library - Final Finished Version
-    - ADDED: Lucide Icon Support for Topbar Icon & Mobile Button
+    VoidLib Custom UI Library - FULL COMPLETED VERSION
+    - Rayfield-Lucide Spritesheet Support (Topbar, Tabs & Mobile Button)
+    - Fully Draggable Mobile Button & Main Window
+    - Configuration Saving & Auto-Load System
+    - Built-in Discord Invite & Key System Handles
 ]]
 
 local module = {}
@@ -66,20 +69,97 @@ local function checkText(val)
 	return tostring(val or "")
 end
 
--- Hilfsfunktion für Lucide Icons
-local function getIconAsset(iconInput)
-	if not iconInput or iconInput == 0 or iconInput == "" then return nil end
-	if typeof(iconInput) == "number" then
-		return "rbxassetid://" .. tostring(iconInput)
-	elseif typeof(iconInput) == "string" then
-		if iconInput:match("^rbxassetid://") or iconInput:match("^http") then
-			return iconInput
-		else
-			-- Generiert eine gültige URL aus dem Lucide-Namen (z.B. "eye", "settings")
-			return "https://lucide.dev/api/icons/" .. string.lower(iconInput)
+-------------------------------------------------------------------
+-- RAYFIELD LUCIDE ICON SYSTEM INTEGRATION
+-------------------------------------------------------------------
+local Icons = nil
+task.spawn(function()
+	pcall(function()
+		local content = game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/icons.lua")
+		if content then
+			local func, err = loadstring(content)
+			if func then
+				Icons = func()
+			end
+		end
+	end)
+end)
+
+local function getIcon(name : string)
+	if not Icons then return nil end
+	name = string.match(string.lower(name), "^%s*(.*)%s*$")
+	local sizedicons = Icons['48px']
+	if not sizedicons then return nil end
+	local r = sizedicons[name]
+	if not r then return nil end
+
+	return {
+		id = r[1],
+		imageRectSize = Vector2.new(r[2][1], r[2][2]),
+		imageRectOffset = Vector2.new(r[3][1], r[3][2]),
+	}
+end
+
+local function isCustomAsset(value)
+	return type(value) == "string" and (string.find(value, "rbxasset://") == 1 or string.find(value, "rbxthumb://") == 1)
+end
+
+local function resolveIcon(icon)
+	if not icon or icon == 0 or icon == "" then
+		return "", nil, nil
+	end
+	if isCustomAsset(icon) then
+		return icon, nil, nil
+	end
+	if typeof(icon) == "string" and Icons then
+		local asset = getIcon(icon)
+		if asset then
+			return "rbxassetid://" .. asset.id, asset.imageRectOffset, asset.imageRectSize
 		end
 	end
-	return nil
+	if typeof(icon) == "number" then
+		return "rbxassetid://" .. icon, nil, nil
+	end
+	if typeof(icon) == "string" and icon:match("^rbxassetid://") then
+		return icon, nil, nil
+	end
+	return "", nil, nil
+end
+
+local function applyIconToLabel(label, iconSource)
+	local img, offset, size = resolveIcon(iconSource)
+	if img and img ~= "" then
+		label.Image = img
+		if offset and size then
+			label.ImageRectOffset = offset
+			label.ImageRectSize = size
+		else
+			label.ImageRectOffset = Vector2.new(0, 0)
+			label.ImageRectSize = Vector2.new(0, 0)
+		end
+		return true
+	end
+	return false
+end
+
+-- Universelle Drag-Funktion (Smooth für Mobile & PC)
+local function makeDraggable(dragFrame, clickFrame)
+	local dragging, dragInput, mousePos, framePos
+	clickFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true; mousePos = input.Position; framePos = dragFrame.Position
+			input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+		end
+	end)
+	clickFrame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+	end)
+	ui.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - mousePos
+			dragFrame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+		end
+	end)
 end
 
 function module:win(config)
@@ -117,21 +197,15 @@ function module:win(config)
 	local fileName = (cfgSettings.FileName or "Big Hub") .. ".json"
 
 	if isSavingEnabled and writefile and readfile and isfolder and makefolder then
-		if not isfolder(folderName) then
-			makefolder(folderName)
-		end
+		if not isfolder(folderName) then makefolder(folderName) end
 		if isfile(folderName .. "/" .. fileName) then
-			pcall(function()
-				savedData = hs:JSONDecode(readfile(folderName .. "/" .. fileName))
-			end)
+			pcall(function() savedData = hs:JSONDecode(readfile(folderName .. "/" .. fileName)) end)
 		end
 	end
 
 	local function saveConfig()
 		if isSavingEnabled and writefile then
-			pcall(function()
-				writefile(folderName .. "/" .. fileName, hs:JSONEncode(savedData))
-			end)
+			pcall(function() writefile(folderName .. "/" .. fileName, hs:JSONEncode(savedData)) end)
 		end
 	end
 
@@ -151,17 +225,11 @@ function module:win(config)
 				:gsub("/", "")
 
 			local inviteFolderName = folderName .. "/Discord Invites"
-			
-			if makefolder and isfolder and not isfolder(inviteFolderName) then
-				makefolder(inviteFolderName)
-			end
+			if makefolder and isfolder and not isfolder(inviteFolderName) then makefolder(inviteFolderName) end
 
 			local fileCheckPath = inviteFolderName .. "/" .. inviteCode .. ".txt"
 			local launchInvite = true
-			
-			if isfile and isfile(fileCheckPath) then
-				launchInvite = false
-			end
+			if isfile and isfile(fileCheckPath) then launchInvite = false end
 
 			if launchInvite then
 				local requestFunc = request or syn.request or http.request or (http and http.request)
@@ -170,21 +238,13 @@ function module:win(config)
 						requestFunc({
 							Url = "http://127.0.0.1:6463/rpc?v=1",
 							Method = "POST",
-							Headers = {
-								["Content-Type"] = "application/json",
-								["Origin"] = "https://discord.com"
-							},
-							Body = hs:JSONEncode({
-								cmd = "INVITE_BROWSER",
-								nonce = hs:GenerateGUID(false),
-								args = { code = inviteCode }
-							})
+							Headers = { ["Content-Type"] = "application/json", ["Origin"] = "https://discord.com" },
+							Body = hs:JSONEncode({ cmd = "INVITE_BROWSER", nonce = hs:GenerateGUID(false), args = { code = inviteCode } })
 						})
 					end)
 				end
-				
 				if discordSettings.RememberJoins and writefile then
-					writefile(fileCheckPath, "VoidLib RememberJoins is true for this invite...")
+					writefile(fileCheckPath, "VoidLib RememberJoins is true...")
 				end
 			end
 		end)
@@ -193,6 +253,7 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- KEY SYSTEM
 	-------------------------------------------------------------------
+	local keyPassed = false
 	if config.KeySystem then
 		local keySettings = config.KeySettings or {}
 		local keyTitle = keySettings.Title or "Untitled"
@@ -213,11 +274,7 @@ function module:win(config)
 			end)
 		end
 
-		local keyPassed = false
-		if makefolder and isfolder and not isfolder(folderName) then
-			makefolder(folderName)
-		end
-
+		if makefolder and isfolder and not isfolder(folderName) then makefolder(folderName) end
 		if keySettings.SaveKey and isfile and readfile and isfile(folderName .. "/" .. keyFileName) then
 			local savedKey = readfile(folderName .. "/" .. keyFileName)
 			for _, k in ipairs(validKeys) do
@@ -234,14 +291,14 @@ function module:win(config)
 
 			create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 15), Size = UDim2.new(1, 0, 0, 25), Text = keyTitle, TextSize = 18, TextColor3 = theme.Text, Font = theme.FontBold })
 			create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 40), Size = UDim2.new(1, 0, 0, 20), Text = keySubtitle, TextSize = 13, TextColor3 = theme.SubText, Font = theme.Font })
-			local noteLbl = create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 65), Size = UDim2.new(1, -40, 0, 40), Text = keyNote, TextSize = 11, TextColor3 = theme.SubText, Font = theme.Font, TextWrapped = true })
+			local noteLbl = create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 65), Size = UDim2.new(1, -44, 0, 40), Text = keyNote, TextSize = 11, TextColor3 = theme.SubText, Font = theme.Font, TextWrapped = true })
 			
-			local inputBg = create("Frame", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 115), Size = UDim2.new(1, -40, 0, 36) })
+			local inputBg = create("Frame", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 115), Size = UDim2.new(1, -44, 0, 36) })
 			reg(inputBg, "BackgroundColor3", "ElementBg")
 			create("UICorner", { Parent = inputBg, CornerRadius = theme.ElementRadius })
 			
 			local keyInput = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 10, 0, 0), Text = "", PlaceholderText = "Enter Key...", TextSize = 14, TextColor3 = theme.Text, Font = theme.Font, ClearTextOnFocus = false })
-			local checkBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 170), Size = UDim2.new(1, -40, 0, 36), Text = "Check Key", TextSize = 14, AutoButtonColor = false })
+			local checkBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 170), Size = UDim2.new(1, -44, 0, 36), Text = "Check Key", TextSize = 14, AutoButtonColor = false })
 			reg(checkBtn, "BackgroundColor3", "Accent")
 			reg(checkBtn, "TextColor3", "Text")
 			reg(checkBtn, "Font", "FontBold")
@@ -254,11 +311,11 @@ function module:win(config)
 				if match then
 					if keySettings.SaveKey and writefile then writefile(folderName .. "/" .. keyFileName, text) end
 					keyPassed = true
-					ts:Create(keyFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, 260), Position = UDim2.new(0.5, -185, 0.5, -130) }):Play()
+					ts:Create(keyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, 260), Position = UDim2.new(0.5, -185, 0.5, -130) }):Play()
 					for _, child in ipairs(keyFrame:GetChildren()) do
 						if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("TextButton") then ts:Create(child, TweenInfo.new(0.2), { Transparency = 1 }):Play() end
 					end
-					task.wait(0.3)
+					task.wait(0.35)
 					keyFrame:Destroy()
 				else
 					keyInput.Text = ""
@@ -267,9 +324,10 @@ function module:win(config)
 					task.delay(2, function() noteLbl.TextColor3 = theme.SubText end)
 				end
 			end)
-
 			while not keyPassed do task.wait(0.1) end
 		end
+	else
+		keyPassed = true
 	end
 
 	-------------------------------------------------------------------
@@ -290,28 +348,29 @@ function module:win(config)
 	reg(topbarLine, "BackgroundColor3", "Accent")
 
 	-------------------------------------------------------------------
-	-- TOPBAR ICON (With Lucide / Asset Support)
+	-- TOPBAR ICON
 	-------------------------------------------------------------------
-	local textOffset = 12
-	local finalIconAsset = getIconAsset(topbarIcon)
-	if finalIconAsset then
-		local iconLabel = create("ImageLabel", { Name = "TopbarIcon", Parent = topbar, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.new(0, 20, 0, 20), Image = finalIconAsset })
-		reg(iconLabel, "ImageColor3", "Text")
-		textOffset = 38
-	end
+	local iconLabel = create("ImageLabel", { Name = "TopbarIcon", Parent = topbar, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.new(0, 20, 0, 20), Image = "" })
+	reg(iconLabel, "ImageColor3", "Text")
+	
+	task.spawn(function()
+		while not Icons do task.wait(0.1) end
+		if not applyIconToLabel(iconLabel, topbarIcon) then
+			iconLabel.Visible = false
+		end
+	end)
 
-	local titleLbl = create("TextLabel", { Name = "title", Parent = topbar, BackgroundTransparency = 1, Position = UDim2.new(0, textOffset, 0, 0), Size = UDim2.new(1, -(textOffset + 80), 1, 0), Text = title, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left })
+	local titleLbl = create("TextLabel", { Name = "title", Parent = topbar, BackgroundTransparency = 1, Position = UDim2.new(0, 38, 0, 0), Size = UDim2.new(1, -118, 1, 0), Text = title, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left })
 	reg(titleLbl, "TextColor3", "Text")
 	reg(titleLbl, "Font", "FontBold")
 
 	local toggleKey = Enum.KeyCode.K
 	if config.ToggleUIKeybind then
-		if typeof(config.ToggleUIKeybind) == "EnumItem" then toggleKey = config.ToggleUIKeybind
-		elseif type(config.ToggleUIKeybind) == "string" and #config.ToggleUIKeybind == 1 then pcall(function() toggleKey = Enum.KeyCode[config.ToggleUIKeybind:upper()] end) end
+		if typeof(config.ToggleUIKeybind) == "EnumItem" then toggleKey = config.ToggleUIKeybind end
 	end
 
 	-------------------------------------------------------------------
-	-- MOBILE RE-OPEN BUTTON (With Lucide / Text Adaptive Support)
+	-- MOBILE RE-OPEN BUTTON
 	-------------------------------------------------------------------
 	local mobileBtn = create("TextButton", { Name = "MobileOpenButton", Parent = screenGui, Size = UDim2.new(0, 100, 0, 32), Position = UDim2.new(1, -115, 1, -45), AutoButtonColor = false, Text = "", Visible = false })
 	reg(mobileBtn, "BackgroundColor3", "Topbar")
@@ -319,28 +378,30 @@ function module:win(config)
 	local mobileStroke = create("UIStroke", { Parent = mobileBtn, Thickness = 1, Transparency = 0.5 })
 	reg(mobileStroke, "Color", "Accent")
 
-	-- Prüft, ob ShowText ein Lucide-Icon-String ist. Wenn nicht, wird normaler Text gerendert.
-	local mobileIconAsset = (showTextString ~= "Rayfield" and showTextString ~= "VoidLib") and getIconAsset(showTextString) or nil
-	if mobileIconAsset then
-		mobileBtn.Size = UDim2.new(0, 36, 0, 36) -- Quadratisch für Icons
-		mobileBtn.Position = UDim2.new(1, -50, 1, -50)
-		local mobileIconImg = create("ImageLabel", { Parent = mobileBtn, Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(0.5, -10, 0.5, -10), BackgroundTransparency = 1, Image = mobileIconAsset })
-		reg(mobileIconImg, "ImageColor3", "Text")
-	else
-		mobileBtn.Text = showTextString
-		reg(mobileBtn, "TextColor3", "Text")
-		reg(mobileBtn, "Font", "FontBold")
-		mobileBtn.TextSize = 13
-	end
+	makeDraggable(mobileBtn, mobileBtn)
+
+	task.spawn(function()
+		while not Icons do task.wait(0.1) end
+		local isLucide = (showTextString ~= "Rayfield" and showTextString ~= "VoidLib") and getIcon(showTextString)
+		if isLucide then
+			mobileBtn.Size = UDim2.new(0, 36, 0, 36)
+			local mobileIconImg = create("ImageLabel", { Parent = mobileBtn, Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(0.5, -10, 0.5, -10), BackgroundTransparency = 1 })
+			reg(mobileIconImg, "ImageColor3", "Text")
+			applyIconToLabel(mobileIconImg, showTextString)
+		else
+			mobileBtn.Text = showTextString
+			reg(mobileBtn, "TextColor3", "Text")
+			reg(mobileBtn, "Font", "FontBold")
+			mobileBtn.TextSize = 13
+		end
+	end)
 
 	local function setUIVisibility(visible)
 		main.Visible = visible
 		mobileBtn.Visible = not visible
 	end
 
-	mobileBtn.MouseButton1Click:Connect(function()
-		setUIVisibility(true)
-	end)
+	mobileBtn.MouseButton1Click:Connect(function() setUIVisibility(true) end)
 
 	local btns = create("Frame", { Name = "btns", Parent = topbar, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(0, 60, 0, 24) })
 	create("UIListLayout", { Parent = btns, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center, HorizontalAlignment = Enum.HorizontalAlignment.Right })
@@ -353,12 +414,10 @@ function module:win(config)
 		create("UICorner", { Parent = btn, CornerRadius = UDim.new(0, 6) })
 
 		btn.MouseEnter:Connect(function()
-			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
-			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { TextColor3 = theme.Accent }):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency, TextColor3 = theme.Accent }):Play()
 		end)
 		btn.MouseLeave:Connect(function()
-			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
-			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { TextColor3 = theme.SubText }):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1, TextColor3 = theme.SubText }):Play()
 		end)
 		return btn
 	end
@@ -368,27 +427,11 @@ function module:win(config)
 
 	minimizeBtn.MouseButton1Click:Connect(function() setUIVisibility(false) end)
 	local toggleKeyConn = ui.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == toggleKey then 
-			setUIVisibility(not main.Visible)
-		end
+		if not processed and input.KeyCode == toggleKey then setUIVisibility(not main.Visible) end
 	end)
 	closeBtn.MouseButton1Click:Connect(function() toggleKeyConn:Disconnect(); screenGui:Destroy() end)
 
-	do
-		local dragging, dragInput, mousePos, framePos
-		topbar.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true; mousePos = input.Position; framePos = main.Position
-				input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
-			end
-		end)
-		topbar.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
-		ui.InputChanged:Connect(function(input)
-			if input == dragInput and dragging then
-				local delta = input.Position - mousePos
-				main.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
-			end
-		end)
-	end
+	makeDraggable(main, topbar)
 
 	local body = create("Frame", { Name = "body", Parent = main, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, theme.TopbarHeight), Size = UDim2.new(1, 0, 1, -theme.TopbarHeight) })
 	local tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(0, theme.TabBarWidth, 1, 0), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3 })
@@ -433,15 +476,20 @@ function module:win(config)
 		reg(indicator, "BackgroundColor3", "Accent")
 		create("UICorner", { Parent = indicator, CornerRadius = UDim.new(1, 0) })
 
-		local tabIconAsset = getIconAsset(icon)
-		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, tabIconAsset and 36 or 12, 0, 0), Size = UDim2.new(1, tabIconAsset and -44 or -20, 1, 0), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, 36, 0, 0), Size = UDim2.new(1, -44, 1, 0), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
 		reg(label, "TextColor3", "Text")
 		reg(label, "Font", "Font")
 
-		if tabIconAsset then
-			local iconLbl = create("ImageLabel", { Parent = btn, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 18, 0, 18), Image = tabIconAsset })
-			reg(iconLbl, "ImageColor3", "SubText")
-		end
+		local tabIconLbl = create("ImageLabel", { Parent = btn, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 18, 0, 18) })
+		reg(tabIconLbl, "ImageColor3", "SubText")
+
+		task.spawn(function()
+			while not Icons do task.wait(0.1) end
+			if not applyIconToLabel(tabIconLbl, icon) then
+				tabIconLbl.Visible = false
+				label.Position = UDim2.new(0, 12, 0, 0)
+			end
+		end)
 
 		btn.MouseEnter:Connect(function() if curBtn ~= btn then ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end end)
 		btn.MouseLeave:Connect(function() if curBtn ~= btn then ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end end)
@@ -472,11 +520,11 @@ function module:win(config)
 			reg(btnEl, "Font", "Font")
 			create("UICorner", { Parent = btnEl, CornerRadius = theme.ElementRadius })
 
-			local glow = create("UIStroke", { Parent = btnEl, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-			reg(glow, "Color", "Accent")
+			local glowE = create("UIStroke", { Parent = btnEl, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+			reg(glowE, "Color", "Accent")
 
-			btnEl.MouseEnter:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
-			btnEl.MouseLeave:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
+			btnEl.MouseEnter:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
+			btnEl.MouseLeave:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
 			btnEl.MouseButton1Click:Connect(cb)
 			return btnEl
 		end
@@ -536,7 +584,6 @@ function module:win(config)
 				applyVisual(true)
 				if cb then cb(toggled) end
 			end)
-
 			return holder
 		end
 
@@ -576,7 +623,6 @@ function module:win(config)
 				saveConfig()
 				if cb then cb(input.Text) end
 			end)
-
 			return holder
 		end
 
@@ -584,7 +630,6 @@ function module:win(config)
 			text = checkText(text)
 			if type(id) == "number" then cb = default; default = max; max = min; min = id; id = text end
 			id = tostring(id)
-			
 			min = tonumber(min) or 0
 			max = tonumber(max) or 100
 			default = tonumber(default) or min
@@ -608,7 +653,7 @@ function module:win(config)
 			reg(fill, "BackgroundColor3", "Accent")
 			create("UICorner", { Parent = fill, CornerRadius = UDim.new(1, 0) })
 
-			local dragging = false
+			local sliderDragging = false
 			local lastVal = valStart
 
 			local function setFromAlpha(alpha)
@@ -616,7 +661,6 @@ function module:win(config)
 				local value = math.floor(min + (max - min) * alpha + 0.5)
 				local denom = (max - min)
 				local scaleX = denom > 0 and ((value - min) / denom) or 0
-				
 				fill.Size = UDim2.new(scaleX, 0, 1, 0)
 				lastVal = value
 				lbl.Text = text .. " : " .. tostring(value)
@@ -624,22 +668,18 @@ function module:win(config)
 
 			track.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-					dragging = true
-					local rel = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
-					setFromAlpha(rel)
+					sliderDragging = true
+					setFromAlpha((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X)
 				end
 			end)
-
 			ui.InputChanged:Connect(function(input)
-				if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-					local rel = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
-					setFromAlpha(rel)
+				if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+					setFromAlpha((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X)
 				end
 			end)
-
 			ui.InputEnded:Connect(function(input)
-				if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-					dragging = false
+				if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+					sliderDragging = false
 					savedData[id] = lastVal
 					saveConfig()
 					if cb then pcall(cb, lastVal) end
@@ -650,7 +690,6 @@ function module:win(config)
 				local denom = (max - min)
 				setFromAlpha(denom > 0 and ((valStart - min) / denom) or 0)
 			end)
-
 			return holder
 		end
 
@@ -661,7 +700,7 @@ function module:win(config)
 			id = tostring(id)
 			list = type(list) == "table" and list or {}
 
-			local open = false
+			local dropdownOpen = false
 			local currentSelected = default or (list[1] or "...")
 			if savedData[id] ~= nil then currentSelected = savedData[id] end
 
@@ -702,7 +741,7 @@ function module:win(config)
 					opt.MouseButton1Click:Connect(function()
 						currentSelected = val
 						selectedLbl.Text = optionStr
-						open = false
+						dropdownOpen = false
 						savedData[id] = val
 						saveConfig()
 						ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
@@ -715,12 +754,12 @@ function module:win(config)
 			updateOptions()
 
 			trigger.MouseButton1Click:Connect(function()
-				open = not open
+				dropdownOpen = not dropdownOpen
 				local maxItems = math.min(#list, 4)
 				local targetContainerHeight = maxItems * (theme.ElementHeight - 2)
-				ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = open and UDim2.new(1, 0, 0, theme.ElementHeight + targetContainerHeight + 6) or UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
-				ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = open and UDim2.new(1, -12, 0, targetContainerHeight) or UDim2.new(1, -12, 0, 0) }):Play()
-				indicator.Text = open and "^" or "V"
+				ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = dropdownOpen and UDim2.new(1, 0, 0, theme.ElementHeight + targetContainerHeight + 6) or UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
+				ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = dropdownOpen and UDim2.new(1, -12, 0, targetContainerHeight) or UDim2.new(1, -12, 0, 0) }):Play()
+				indicator.Text = dropdownOpen and "^" or "V"
 			end)
 
 			return { Refresh = function(_, nl, nd) list = nl or {}; if nd then currentSelected = nd; selectedLbl.Text = tostring(nd) end; updateOptions() end }
@@ -787,7 +826,6 @@ function module:win(config)
 					end
 				end
 			end)
-
 			return holder
 		end
 
@@ -848,7 +886,6 @@ function module:win(config)
 
 		fadeTween:Play()
 		fadeTween.Completed:Wait()
-		
 		loadingFrame:Destroy()
 	end)
 
