@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Semi Final Update
+    - Final Update?
 ]]
 
 local module = {}
@@ -389,6 +389,24 @@ function module:win(config)
 
 		if type(validKeys) == "string" then validKeys = {validKeys} end
 
+		-- LinkToKey = "https://.../key.txt" - fetches the valid key(s) from a remote
+		-- text file instead of (or in addition to) hardcoding them in the script.
+		-- One key per line; empty lines are ignored. If the fetch fails, the
+		-- hardcoded `Key` list above is used as a fallback.
+		if type(keySettings.LinkToKey) == "string" and keySettings.LinkToKey ~= "" then
+			pcall(function()
+				local success, res = pcall(game.HttpGet, game, keySettings.LinkToKey)
+				if success and type(res) == "string" then
+					local fetchedKeys = {}
+					for line in res:gmatch("[^\r\n]+") do
+						line = line:match("^%s*(.-)%s*$")
+						if line ~= "" then table.insert(fetchedKeys, line) end
+					end
+					if #fetchedKeys > 0 then validKeys = fetchedKeys end
+				end
+			end)
+		end
+
 		if makefolder and isfolder and not isfolder(folderName) then makefolder(folderName) end
 		if keySettings.SaveKey and isfile and readfile and isfile(folderName .. "/" .. keyFileName) then
 			local savedKey = readfile(folderName .. "/" .. keyFileName)
@@ -487,9 +505,44 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
+	-- LAYOUT: TABS POSITION & WINDOW SIZE
+	-------------------------------------------------------------------
+	-- TabsPosition = "Left" (default, sidebar like before) or "Top" (horizontal tab row
+	-- under the topbar, Rayfield-style minimal layout). Everything else (window size
+	-- defaults, tab bar orientation, content area) adapts automatically to this choice.
+	local tabsPosition = (config.TabsPosition == "Top") and "Top" or "Left"
+
+	-- WindowSize: leave unset (or "Default") for a size preset that matches TabsPosition,
+	-- or pass a table { Width = ..., Height = ... } for a fully custom size. Everything
+	-- (tab bar, content area, centering) automatically adapts to whatever size is chosen.
+	local defaultWindowDims = {
+		Left = { 550, 350 },
+		Top = { 620, 400 },
+	}
+	local windowWidth, windowHeight
+	if type(config.WindowSize) == "table" and (config.WindowSize.Width or config.WindowSize.Height) then
+		local d = defaultWindowDims[tabsPosition]
+		windowWidth = tonumber(config.WindowSize.Width) or d[1]
+		windowHeight = tonumber(config.WindowSize.Height) or d[2]
+	else
+		local d = defaultWindowDims[tabsPosition]
+		windowWidth, windowHeight = d[1], d[2]
+	end
+	local windowSize = UDim2.new(0, windowWidth, 0, windowHeight)
+
+	-- Auto-center for whatever size was picked, unless the caller explicitly set a
+	-- custom WindowPosition via ThemeOverrides (in which case we respect that instead).
+	local windowPosition = theme.WindowPosition
+	if not (config.ThemeOverrides and config.ThemeOverrides.WindowPosition) then
+		windowPosition = UDim2.new(0.5, -windowWidth / 2, 0.5, -windowHeight / 2)
+	end
+
+	local tabBarSize = 44 -- height of the horizontal tab row when TabsPosition == "Top"
+
+	-------------------------------------------------------------------
 	-- MAIN UI WINDOW
 	-------------------------------------------------------------------
-	local main = create("Frame", { Name = "Frame", Parent = screenGui, Size = theme.WindowSize, Position = theme.WindowPosition, BorderSizePixel = 0, ClipsDescendants = true, Visible = false })
+	local main = create("Frame", { Name = "Frame", Parent = screenGui, Size = windowSize, Position = windowPosition, BorderSizePixel = 0, ClipsDescendants = true, Visible = false })
 	reg(main, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = main, CornerRadius = theme.CornerRadius })
 
@@ -595,13 +648,26 @@ function module:win(config)
 	makeDraggable(main, topbar)
 
 	local body = create("Frame", { Name = "body", Parent = main, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, theme.TopbarHeight), Size = UDim2.new(1, 0, 1, -theme.TopbarHeight) })
-	local tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(0, theme.TabBarWidth, 1, 0), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3 })
-	reg(tabBar, "BackgroundColor3", "TabBar")
-	reg(tabBar, "ScrollBarImageColor3", "Accent")
-	create("UIListLayout", { Parent = tabBar, Padding = UDim.new(0, 4) })
-	create("UIPadding", { Parent = tabBar, PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
 
-	local sectionsHolder = create("Frame", { Name = "sectionsholder", Parent = body, BackgroundTransparency = 1, Position = UDim2.new(0, theme.TabBarWidth, 0, 0), Size = UDim2.new(1, -theme.TabBarWidth, 1, 0), ClipsDescendants = true })
+	local tabBar, sectionsHolder
+	if tabsPosition == "Top" then
+		tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(1, 0, 0, tabBarSize), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 3 })
+		reg(tabBar, "BackgroundColor3", "TabBar")
+		reg(tabBar, "ScrollBarImageColor3", "Accent")
+		create("UIListLayout", { Parent = tabBar, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center })
+		create("UIPadding", { Parent = tabBar, PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) })
+
+		sectionsHolder = create("Frame", { Name = "sectionsholder", Parent = body, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, tabBarSize), Size = UDim2.new(1, 0, 1, -tabBarSize), ClipsDescendants = true })
+	else
+		tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(0, theme.TabBarWidth, 1, 0), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3 })
+		reg(tabBar, "BackgroundColor3", "TabBar")
+		reg(tabBar, "ScrollBarImageColor3", "Accent")
+		create("UIListLayout", { Parent = tabBar, Padding = UDim.new(0, 4) })
+		create("UIPadding", { Parent = tabBar, PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
+
+		sectionsHolder = create("Frame", { Name = "sectionsholder", Parent = body, BackgroundTransparency = 1, Position = UDim2.new(0, theme.TabBarWidth, 0, 0), Size = UDim2.new(1, -theme.TabBarWidth, 1, 0), ClipsDescendants = true })
+	end
+
 	local sections = {}
 	local curBtn, curSection = nil, nil
 
@@ -626,18 +692,28 @@ function module:win(config)
 
 	function sections:tab(title, icon)
 		title = checkText(title)
-		local btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+		local btn
+		if tabsPosition == "Top" then
+			btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(0, 130, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+		else
+			btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+		end
 		reg(btn, "BackgroundColor3", "ElementBg")
 		create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
 
 		local glow = create("UIStroke", { Name = "glow", Parent = btn, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 		reg(glow, "Color", "Accent")
 
-		local indicator = create("Frame", { Name = "indicator", Parent = btn, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 3, 0.6, 0), BackgroundTransparency = 1, BorderSizePixel = 0 })
+		local indicator
+		if tabsPosition == "Top" then
+			indicator = create("Frame", { Name = "indicator", Parent = btn, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(0.6, 0, 0, 3), BackgroundTransparency = 1, BorderSizePixel = 0 })
+		else
+			indicator = create("Frame", { Name = "indicator", Parent = btn, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 3, 0.6, 0), BackgroundTransparency = 1, BorderSizePixel = 0 })
+		end
 		reg(indicator, "BackgroundColor3", "Accent")
 		create("UICorner", { Parent = indicator, CornerRadius = UDim.new(1, 0) })
 
-		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, 36, 0, 0), Size = UDim2.new(1, -44, 1, 0), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, 36, 0, 0), Size = UDim2.new(1, -44, 1, 0), Text = title, TextSize = 13, TextXAlignment = tabsPosition == "Top" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left })
 		reg(label, "TextColor3", "Text")
 		reg(label, "Font", "Font")
 
@@ -649,6 +725,7 @@ function module:win(config)
 			if not applyIconToLabel(tabIconLbl, icon) then
 				tabIconLbl.Visible = false
 				label.Position = UDim2.new(0, 12, 0, 0)
+				label.Size = UDim2.new(1, -24, 1, 0)
 			end
 		end)
 
@@ -1310,7 +1387,7 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- LOADING SCREEN OVERLAY
 	-------------------------------------------------------------------
-	local loadingFrame = create("Frame", { Name = "LoadingOverlay", Parent = screenGui, Size = theme.WindowSize, Position = theme.WindowPosition, BorderSizePixel = 0, ZIndex = 10 })
+	local loadingFrame = create("Frame", { Name = "LoadingOverlay", Parent = screenGui, Size = windowSize, Position = windowPosition, BorderSizePixel = 0, ZIndex = 10 })
 	reg(loadingFrame, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = loadingFrame, CornerRadius = theme.CornerRadius })
 	
@@ -1351,7 +1428,7 @@ function module:win(config)
 
 		main.Visible = true
 
-		local fadeTween = ts:Create(loadingFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = theme.WindowSize + UDim2.new(0, 40, 0, 40), Position = theme.WindowPosition - UDim2.new(0, 20, 0, 20) })
+		local fadeTween = ts:Create(loadingFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = windowSize + UDim2.new(0, 40, 0, 40), Position = windowPosition - UDim2.new(0, 20, 0, 20) })
 		ts:Create(loadLogo, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
 		ts:Create(loadTitleLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
 		ts:Create(loadSubLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
