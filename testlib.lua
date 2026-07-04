@@ -1,6 +1,9 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Updated GetKey System
+    - Rayfield-Lucide Spritesheet Support (Topbar, Tabs & Mobile Button)
+    - Fully Draggable Mobile Button & Main Window
+    - Configuration Saving & Auto-Load System
+    - Built-in Discord Invite & Key System Handles
 ]]
 
 local module = {}
@@ -370,8 +373,20 @@ function module:win(config)
 			end
 		end
 
-		for _, name in ipairs({ "openurl", "open_url" }) do
-			local fn = rawget(_G, name)
+		-- Best-effort attempts for non-Discord links. None of these are guaranteed to
+		-- exist - most executors simply don't expose a real "open my system browser"
+		-- function, since that's an OS-level action outside the Roblox sandbox. If
+		-- none of these work, the caller always falls back to copying to clipboard.
+		local env = (getgenv and getgenv()) or _G
+		local candidates = {
+			(type(openurl) == "function") and openurl or nil,
+			(type(open_url) == "function") and open_url or nil,
+			env and env.openurl,
+			env and env.open_url,
+			env and env.OpenURL,
+			env and env.browseurl,
+		}
+		for _, fn in ipairs(candidates) do
 			if type(fn) == "function" then
 				local ok = pcall(fn, link)
 				if ok then return true end
@@ -391,49 +406,31 @@ function module:win(config)
 		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
 		local validKeys = keySettings.Key or {"Hello"}
 
-		-- GetKey = { "link or text", {"copy", "gotowebsite"}, {"Title", "Content", Duration, Image} }
-		-- 1) the value to copy/open, 2) which button(s) to show, 3) optional Notify config fired on click
-		local getKeyValue, getKeyActions, getKeyNotify
+		-- GetKey = { "link or text", { copy = { Text = "...", Notify = {Title, Content, Duration, Image} },
+		--                              gotowebsite = { Text = "...", Notify = {Title, Content, Duration, Image} } } }
+		-- Only include the action keys (copy / gotowebsite) you actually want a button for.
+		local getKeyValue, getKeyOptions = nil, {}
 		if type(keySettings.GetKey) == "table" then
 			getKeyValue = keySettings.GetKey[1]
-			local actionsField = keySettings.GetKey[2]
-			if type(actionsField) == "table" then getKeyActions = actionsField
-			elseif type(actionsField) == "string" then getKeyActions = { actionsField }
-			else getKeyActions = {} end
-			getKeyNotify = type(keySettings.GetKey[3]) == "table" and keySettings.GetKey[3] or nil
+			if type(keySettings.GetKey[2]) == "table" then getKeyOptions = keySettings.GetKey[2] end
 		end
 
-		local wantsCopy, wantsGoto = false, false
-		for _, action in ipairs(getKeyActions or {}) do
-			local a = tostring(action):lower()
-			if a == "copy" then wantsCopy = true end
-			if a == "gotowebsite" or a == "goto" or a == "website" then wantsGoto = true end
-		end
+		local copyOpts = type(getKeyOptions.copy) == "table" and getKeyOptions.copy or nil
+		local gotoOpts = type(getKeyOptions.gotowebsite) == "table" and getKeyOptions.gotowebsite or nil
+		local hasGetKey = type(getKeyValue) == "string" and getKeyValue ~= "" and (copyOpts or gotoOpts)
 
-		local hasGetKey = type(getKeyValue) == "string" and getKeyValue ~= "" and (wantsCopy or wantsGoto)
-
-		local function fireGetKeyNotify()
-			if getKeyNotify then
+		local function fireNotify(notifyCfg)
+			if type(notifyCfg) == "table" then
 				module:Notify({
-					Title = getKeyNotify[1],
-					Content = getKeyNotify[2],
-					Duration = getKeyNotify[3],
-					Image = getKeyNotify[4],
+					Title = notifyCfg[1],
+					Content = notifyCfg[2],
+					Duration = notifyCfg[3],
+					Image = notifyCfg[4],
 				})
 			end
 		end
 
 		if type(validKeys) == "string" then validKeys = {validKeys} end
-
-		if keySettings.GrabKeyFromSite and keySettings.Key and type(keySettings.Key) == "string" then
-			pcall(function()
-				local success, res = pcall(game.HttpGet, game, keySettings.Key)
-				if success then
-					validKeys = {}
-					for line in res:gmatch("[^\r\n]+") do table.insert(validKeys, line) end
-				end
-			end)
-		end
 
 		if makefolder and isfolder and not isfolder(folderName) then makefolder(folderName) end
 		if keySettings.SaveKey and isfile and readfile and isfile(folderName .. "/" .. keyFileName) then
@@ -481,44 +478,36 @@ function module:win(config)
 					create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
 				end
 
-				if wantsGoto and wantsCopy then
-					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
-					styleGetKeyBtn(openBtn)
-					local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Kopieren", TextSize = 12, AutoButtonColor = false })
-					styleGetKeyBtn(copyBtn)
+				local function doCopy()
+					local clip = setclipboard or toclipboard
+					if clip then pcall(clip, getKeyValue) end
+					fireNotify(copyOpts.Notify)
+				end
 
-					openBtn.MouseButton1Click:Connect(function()
-						local opened = tryOpenLink(getKeyValue)
-						if not opened then
-							local clip = setclipboard or toclipboard
-							if clip then pcall(clip, getKeyValue) end
-						end
-						fireGetKeyNotify()
-					end)
-					copyBtn.MouseButton1Click:Connect(function()
+				local function doGoto()
+					local opened = tryOpenLink(getKeyValue)
+					if not opened then
 						local clip = setclipboard or toclipboard
 						if clip then pcall(clip, getKeyValue) end
-						fireGetKeyNotify()
-					end)
-				elseif wantsGoto then
-					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
+					end
+					fireNotify(gotoOpts.Notify)
+				end
+
+				if gotoOpts and copyOpts then
+					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = gotoOpts.Text or "Zur Webseite", TextSize = 12, AutoButtonColor = false })
 					styleGetKeyBtn(openBtn)
-					openBtn.MouseButton1Click:Connect(function()
-						local opened = tryOpenLink(getKeyValue)
-						if not opened then
-							local clip = setclipboard or toclipboard
-							if clip then pcall(clip, getKeyValue) end
-						end
-						fireGetKeyNotify()
-					end)
-				elseif wantsCopy then
-					local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = "Kopieren", TextSize = 12, AutoButtonColor = false })
+					local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
 					styleGetKeyBtn(copyBtn)
-					copyBtn.MouseButton1Click:Connect(function()
-						local clip = setclipboard or toclipboard
-						if clip then pcall(clip, getKeyValue) end
-						fireGetKeyNotify()
-					end)
+					openBtn.MouseButton1Click:Connect(doGoto)
+					copyBtn.MouseButton1Click:Connect(doCopy)
+				elseif gotoOpts then
+					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = gotoOpts.Text or "Zur Webseite", TextSize = 12, AutoButtonColor = false })
+					styleGetKeyBtn(openBtn)
+					openBtn.MouseButton1Click:Connect(doGoto)
+				elseif copyOpts then
+					local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
+					styleGetKeyBtn(copyBtn)
+					copyBtn.MouseButton1Click:Connect(doCopy)
 				end
 
 				nextY = nextY + 42
