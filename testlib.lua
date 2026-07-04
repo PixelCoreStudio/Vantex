@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Fixed last bugs.
+    - last small updates
 ]]
 
 local module = {}
@@ -1046,6 +1046,13 @@ function module:win(config)
 				bindBtn.Text = currentKey
 				savedData[id] = currentKey
 				saveConfig()
+				if cb and not silent then
+					if holdToInteract then
+						pcall(cb, true)
+					else
+						pcall(cb, currentKey)
+					end
+				end
 			end
 			function keybindObj:Get()
 				return currentKey, holding
