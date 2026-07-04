@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Added a :Get()
+    - Fixed last bugs.
 ]]
 
 local module = {}
@@ -449,7 +449,12 @@ function module:win(config)
 
 	local toggleKey = Enum.KeyCode.K
 	if config.ToggleUIKeybind then
-		if typeof(config.ToggleUIKeybind) == "EnumItem" then toggleKey = config.ToggleUIKeybind end
+		if typeof(config.ToggleUIKeybind) == "EnumItem" then
+			toggleKey = config.ToggleUIKeybind
+		elseif type(config.ToggleUIKeybind) == "string" then
+			local ok, enumKey = pcall(function() return Enum.KeyCode[config.ToggleUIKeybind] end)
+			if ok and enumKey then toggleKey = enumKey end
+		end
 	end
 
 	-------------------------------------------------------------------
