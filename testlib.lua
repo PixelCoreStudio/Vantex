@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - last small updates
+    - Updated Keysystem
 ]]
 
 local module = {}
@@ -140,6 +140,16 @@ local function applyIconToLabel(label, iconSource)
 end
 
 -- Universelle Drag-Funktion (Smooth für Mobile & PC)
+local function nullChain()
+	local t = {}
+	setmetatable(t, {
+		__index = function()
+			return function() return nullChain() end
+		end,
+	})
+	return t
+end
+
 local function makeDraggable(dragFrame, clickFrame)
 	local dragging, dragInput, mousePos, framePos
 	clickFrame.InputBegan:Connect(function(input)
@@ -337,6 +347,7 @@ function module:win(config)
 	-- KEY SYSTEM
 	-------------------------------------------------------------------
 	local keyPassed = false
+	local keyClosed = false
 	if config.KeySystem then
 		local keySettings = config.KeySettings or {}
 		local keyTitle = keySettings.Title or "Untitled"
@@ -344,6 +355,10 @@ function module:win(config)
 		local keyNote = keySettings.Note or "No method of obtaining the key is provided"
 		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
 		local validKeys = keySettings.Key or {"Hello"}
+
+		-- The same URL can be reused both to fetch valid keys (GrabKeyFromSite)
+		-- and as the "Get Key" link shown to the user - no need to set it twice.
+		local keyLink = keySettings.Link or (type(keySettings.Key) == "string" and keySettings.Key or nil)
 
 		if type(validKeys) == "string" then validKeys = {validKeys} end
 
@@ -366,26 +381,85 @@ function module:win(config)
 		end
 
 		if not keyPassed then
-			local keyFrame = create("Frame", { Name = "KeySystemOverlay", Parent = screenGui, Size = UDim2.new(0, 350, 0, 240), Position = UDim2.new(0.5, -175, 0.5, -120), BorderSizePixel = 0, ZIndex = 20 })
+			local hasLink = type(keyLink) == "string" and keyLink ~= ""
+			local frameHeight = hasLink and 288 or 240
+
+			local keyFrame = create("Frame", { Name = "KeySystemOverlay", Parent = screenGui, Size = UDim2.new(0, 350, 0, frameHeight), Position = UDim2.new(0.5, -175, 0.5, -(frameHeight / 2)), BorderSizePixel = 0, ZIndex = 20, ClipsDescendants = false })
 			reg(keyFrame, "BackgroundColor3", "Background")
 			create("UICorner", { Parent = keyFrame, CornerRadius = theme.CornerRadius })
 			local kStroke = create("UIStroke", { Parent = keyFrame, Thickness = 1, Transparency = theme.WindowStrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 			reg(kStroke, "Color", "Accent")
 
-			create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 15), Size = UDim2.new(1, 0, 0, 25), Text = keyTitle, TextSize = 18, TextColor3 = theme.Text, Font = theme.FontBold })
-			create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 40), Size = UDim2.new(1, 0, 0, 20), Text = keySubtitle, TextSize = 13, TextColor3 = theme.SubText, Font = theme.Font })
+			-- Drag handle: covers just the title/subtitle area so it doesn't block the
+			-- textbox/buttons below it, exactly like the main window's topbar.
+			local dragHandle = create("Frame", { Parent = keyFrame, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 60) })
+
+			-- Close button (top-right corner) - fully shuts the key window AND aborts
+			-- the rest of the window setup, so the caller's script doesn't error out.
+			local closeBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.new(0, 24, 0, 24), Text = "X", TextSize = 14, BackgroundTransparency = 1, AutoButtonColor = false, ZIndex = 21 })
+			reg(closeBtn, "TextColor3", "SubText")
+			reg(closeBtn, "Font", "FontBold")
+			closeBtn.MouseEnter:Connect(function() ts:Create(closeBtn, TweenInfo.new(0.15), { TextColor3 = Color3.fromRGB(255, 80, 80) }):Play() end)
+			closeBtn.MouseLeave:Connect(function() reg(closeBtn, "TextColor3", "SubText") end)
+			closeBtn.MouseButton1Click:Connect(function()
+				keyClosed = true
+				keyFrame:Destroy()
+			end)
+
+			create("TextLabel", { Parent = dragHandle, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 15), Size = UDim2.new(1, -40, 0, 25), Text = keyTitle, TextSize = 18, TextColor3 = theme.Text, Font = theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center })
+			create("TextLabel", { Parent = dragHandle, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 40), Size = UDim2.new(1, -40, 0, 20), Text = keySubtitle, TextSize = 13, TextColor3 = theme.SubText, Font = theme.Font, TextXAlignment = Enum.TextXAlignment.Center })
 			local noteLbl = create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 65), Size = UDim2.new(1, -44, 0, 40), Text = keyNote, TextSize = 11, TextColor3 = theme.SubText, Font = theme.Font, TextWrapped = true })
-			
-			local inputBg = create("Frame", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 115), Size = UDim2.new(1, -44, 0, 36) })
+
+			local nextY = 110
+			if hasLink then
+				local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
+				reg(openBtn, "BackgroundColor3", "ElementBg")
+				reg(openBtn, "TextColor3", "Text")
+				reg(openBtn, "Font", "Font")
+				create("UICorner", { Parent = openBtn, CornerRadius = theme.ElementRadius })
+
+				local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Link kopieren", TextSize = 12, AutoButtonColor = false })
+				reg(copyBtn, "BackgroundColor3", "ElementBg")
+				reg(copyBtn, "TextColor3", "Text")
+				reg(copyBtn, "Font", "Font")
+				create("UICorner", { Parent = copyBtn, CornerRadius = theme.ElementRadius })
+
+				openBtn.MouseButton1Click:Connect(function()
+					local ok = pcall(function() game:GetService("GuiService"):OpenBrowserWindow(keyLink) end)
+					if not ok then
+						local clip = setclipboard or toclipboard
+						if clip then pcall(clip, keyLink) end
+						module:Notify({ Title = "Konnte Webseite nicht öffnen", Content = "Der Link wurde stattdessen in die Zwischenablage kopiert.", Duration = 4 })
+					else
+						module:Notify({ Title = "Webseite geöffnet", Content = "Der Get-Key-Link wurde geöffnet.", Duration = 3 })
+					end
+				end)
+
+				copyBtn.MouseButton1Click:Connect(function()
+					local clip = setclipboard or toclipboard
+					local ok = clip and pcall(clip, keyLink)
+					if ok then
+						module:Notify({ Title = "Link kopiert", Content = "Der Get-Key-Link wurde in die Zwischenablage kopiert.", Duration = 3 })
+					else
+						module:Notify({ Title = "Kopieren fehlgeschlagen", Content = "Dein Executor unterstützt setclipboard nicht.", Duration = 4 })
+					end
+				end)
+
+				nextY = nextY + 42
+			end
+
+			local inputBg = create("Frame", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 36) })
 			reg(inputBg, "BackgroundColor3", "ElementBg")
 			create("UICorner", { Parent = inputBg, CornerRadius = theme.ElementRadius })
-			
+
 			local keyInput = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 10, 0, 0), Text = "", PlaceholderText = "Enter Key...", TextSize = 14, TextColor3 = theme.Text, Font = theme.Font, ClearTextOnFocus = false })
-			local checkBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, 170), Size = UDim2.new(1, -44, 0, 36), Text = "Check Key", TextSize = 14, AutoButtonColor = false })
+			local checkBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY + 44), Size = UDim2.new(1, -44, 0, 36), Text = "Check Key", TextSize = 14, AutoButtonColor = false })
 			reg(checkBtn, "BackgroundColor3", "Accent")
 			reg(checkBtn, "TextColor3", "Text")
 			reg(checkBtn, "Font", "FontBold")
 			create("UICorner", { Parent = checkBtn, CornerRadius = theme.ElementRadius })
+
+			makeDraggable(keyFrame, dragHandle)
 
 			checkBtn.MouseButton1Click:Connect(function()
 				local text = keyInput.Text
@@ -394,23 +468,30 @@ function module:win(config)
 				if match then
 					if keySettings.SaveKey and writefile then writefile(folderName .. "/" .. keyFileName, text) end
 					keyPassed = true
-					ts:Create(keyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, 260), Position = UDim2.new(0.5, -185, 0.5, -130) }):Play()
-					for _, child in ipairs(keyFrame:GetChildren()) do
+					module:Notify({ Title = "Zugriff gewährt", Content = "Der Key war korrekt.", Duration = 3 })
+					ts:Create(keyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, frameHeight + 20), Position = UDim2.new(0.5, -185, 0.5, -(frameHeight + 20) / 2) }):Play()
+					for _, child in ipairs(keyFrame:GetDescendants()) do
 						if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("TextButton") then ts:Create(child, TweenInfo.new(0.2), { Transparency = 1 }):Play() end
 					end
 					task.wait(0.35)
-					keyFrame:Destroy()
+					if keyFrame and keyFrame.Parent then keyFrame:Destroy() end
 				else
 					keyInput.Text = ""
 					keyInput.PlaceholderText = "Invalid Key! Try Again."
 					noteLbl.TextColor3 = Color3.fromRGB(255, 50, 50)
-					task.delay(2, function() noteLbl.TextColor3 = theme.SubText end)
+					module:Notify({ Title = "Falscher Key", Content = "Der eingegebene Key ist ungültig.", Duration = 3 })
+					task.delay(2, function() if noteLbl and noteLbl.Parent then noteLbl.TextColor3 = theme.SubText end end)
 				end
 			end)
-			while not keyPassed do task.wait(0.1) end
+			while not keyPassed and not keyClosed do task.wait(0.1) end
 		end
 	else
 		keyPassed = true
+	end
+
+	if keyClosed then
+		if screenGui and screenGui.Parent then screenGui:Destroy() end
+		return nullChain()
 	end
 
 	-------------------------------------------------------------------
