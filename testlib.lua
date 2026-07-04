@@ -1,9 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Rayfield-Lucide Spritesheet Support (Topbar, Tabs & Mobile Button)
-    - Fully Draggable Mobile Button & Main Window
-    - Configuration Saving & Auto-Load System
-    - Built-in Discord Invite & Key System Handles
+    - Semi Final Update
 ]]
 
 local module = {}
@@ -287,7 +284,15 @@ function module:win(config)
 	-------------------------------------------------------------------
 	local cfgSettings = config.ConfigurationSaving or { Enabled = false }
 	local isSavingEnabled = (cfgSettings.Enabled == true or cfgSettings.Enable == true)
-	
+
+	-- When All is true (default), every element with an id gets saved automatically,
+	-- exactly like before. When explicitly set to false, only elements that were
+	-- created with `Save = true` in their own config/opts get persisted.
+	local saveAll = (cfgSettings.All ~= false)
+	local function canSaveElement(opts)
+		return saveAll or (type(opts) == "table" and opts.Save == true)
+	end
+
 	local savedData = {}
 	local folderName = cfgSettings.FolderName or "CustomUILocks"
 	local fileName = (cfgSettings.FileName or "Big Hub") .. ".json"
@@ -350,52 +355,6 @@ function module:win(config)
 	-- KEY SYSTEM
 	-------------------------------------------------------------------
 
-	-- Tries to actually open a link for the user. Discord invites can be opened
-	-- for real via Discord's local RPC endpoint (same trick as the Discord Invite
-	-- System above, just generalized to pull the invite code out of any discord
-	-- link). For anything else we try a couple of common executor globals, then
-	-- fall back to Roblox's own (often locked-down) browser API. None of this is
-	-- guaranteed to work everywhere, which is why "copy" is always offered too.
-	local function tryOpenLink(link)
-		local discordCode = tostring(link):match("discord%.gg/([%w%-]+)") or tostring(link):match("discord%.com/invite/([%w%-]+)")
-		if discordCode then
-			local requestFunc = request or (syn and syn.request) or (http and http.request)
-			if requestFunc then
-				local ok = pcall(function()
-					requestFunc({
-						Url = "http://127.0.0.1:6463/rpc?v=1",
-						Method = "POST",
-						Headers = { ["Content-Type"] = "application/json", ["Origin"] = "https://discord.com" },
-						Body = hs:JSONEncode({ cmd = "INVITE_BROWSER", nonce = hs:GenerateGUID(false), args = { code = discordCode } })
-					})
-				end)
-				if ok then return true end
-			end
-		end
-
-		-- Best-effort attempts for non-Discord links. None of these are guaranteed to
-		-- exist - most executors simply don't expose a real "open my system browser"
-		-- function, since that's an OS-level action outside the Roblox sandbox. If
-		-- none of these work, the caller always falls back to copying to clipboard.
-		local env = (getgenv and getgenv()) or _G
-		local candidates = {
-			(type(openurl) == "function") and openurl or nil,
-			(type(open_url) == "function") and open_url or nil,
-			env and env.openurl,
-			env and env.open_url,
-			env and env.OpenURL,
-			env and env.browseurl,
-		}
-		for _, fn in ipairs(candidates) do
-			if type(fn) == "function" then
-				local ok = pcall(fn, link)
-				if ok then return true end
-			end
-		end
-
-		return pcall(function() game:GetService("GuiService"):OpenBrowserWindow(link) end)
-	end
-
 	local keyPassed = false
 	local keyClosed = false
 	if config.KeySystem then
@@ -406,9 +365,8 @@ function module:win(config)
 		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
 		local validKeys = keySettings.Key or {"Hello"}
 
-		-- GetKey = { "link or text", { copy = { Text = "...", Notify = {Title, Content, Duration, Image} },
-		--                              gotowebsite = { Text = "...", Notify = {Title, Content, Duration, Image} } } }
-		-- Only include the action keys (copy / gotowebsite) you actually want a button for.
+		-- GetKey = { "link or text", { copy = { Text = "...", Notify = {Title, Content, Duration, Image} } } }
+		-- Only "copy" is supported (opening arbitrary websites isn't reliably possible from a Roblox script).
 		local getKeyValue, getKeyOptions = nil, {}
 		if type(keySettings.GetKey) == "table" then
 			getKeyValue = keySettings.GetKey[1]
@@ -416,8 +374,7 @@ function module:win(config)
 		end
 
 		local copyOpts = type(getKeyOptions.copy) == "table" and getKeyOptions.copy or nil
-		local gotoOpts = type(getKeyOptions.gotowebsite) == "table" and getKeyOptions.gotowebsite or nil
-		local hasGetKey = type(getKeyValue) == "string" and getKeyValue ~= "" and (copyOpts or gotoOpts)
+		local hasGetKey = type(getKeyValue) == "string" and getKeyValue ~= "" and copyOpts
 
 		local function fireNotify(notifyCfg)
 			if type(notifyCfg) == "table" then
@@ -471,44 +428,16 @@ function module:win(config)
 
 			local nextY = 110
 			if hasGetKey then
-				local function styleGetKeyBtn(btn)
-					reg(btn, "BackgroundColor3", "ElementBg")
-					reg(btn, "TextColor3", "Text")
-					reg(btn, "Font", "Font")
-					create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
-				end
-
-				local function doCopy()
+				local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
+				reg(copyBtn, "BackgroundColor3", "ElementBg")
+				reg(copyBtn, "TextColor3", "Text")
+				reg(copyBtn, "Font", "Font")
+				create("UICorner", { Parent = copyBtn, CornerRadius = theme.ElementRadius })
+				copyBtn.MouseButton1Click:Connect(function()
 					local clip = setclipboard or toclipboard
 					if clip then pcall(clip, getKeyValue) end
 					fireNotify(copyOpts.Notify)
-				end
-
-				local function doGoto()
-					local opened = tryOpenLink(getKeyValue)
-					if not opened then
-						local clip = setclipboard or toclipboard
-						if clip then pcall(clip, getKeyValue) end
-					end
-					fireNotify(gotoOpts.Notify)
-				end
-
-				if gotoOpts and copyOpts then
-					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = gotoOpts.Text or "Zur Webseite", TextSize = 12, AutoButtonColor = false })
-					styleGetKeyBtn(openBtn)
-					local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
-					styleGetKeyBtn(copyBtn)
-					openBtn.MouseButton1Click:Connect(doGoto)
-					copyBtn.MouseButton1Click:Connect(doCopy)
-				elseif gotoOpts then
-					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = gotoOpts.Text or "Zur Webseite", TextSize = 12, AutoButtonColor = false })
-					styleGetKeyBtn(openBtn)
-					openBtn.MouseButton1Click:Connect(doGoto)
-				elseif copyOpts then
-					local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
-					styleGetKeyBtn(copyBtn)
-					copyBtn.MouseButton1Click:Connect(doCopy)
-				end
+				end)
 
 				nextY = nextY + 42
 			end
@@ -814,10 +743,12 @@ function module:win(config)
 			return btnObj
 		end
 
-		function contents:toggle(text, id, default, cb)
+		function contents:toggle(text, id, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "boolean" or type(id) == "nil" then cb = default; default = id; id = text end
 			id = tostring(id)
+			opts = type(opts) == "table" and opts or {}
+			local elementCanSave = canSaveElement(opts)
 
 			local toggled = default and true or false
 			if savedData[id] ~= nil then toggled = savedData[id] end
@@ -864,8 +795,7 @@ function module:win(config)
 
 			holder.MouseButton1Click:Connect(function()
 				toggled = not toggled
-				savedData[id] = toggled
-				saveConfig()
+				if elementCanSave then savedData[id] = toggled; saveConfig() end
 				applyVisual(true)
 				if cb then cb(toggled) end
 			end)
@@ -873,8 +803,7 @@ function module:win(config)
 			local toggleObj = { Instance = holder }
 			function toggleObj:Set(newVal, silent)
 				toggled = newVal and true or false
-				savedData[id] = toggled
-				saveConfig()
+				if elementCanSave then savedData[id] = toggled; saveConfig() end
 				applyVisual(true)
 				if cb and not silent then cb(toggled) end
 			end
@@ -893,6 +822,7 @@ function module:win(config)
 			opts = type(opts) == "table" and opts or {}
 			local placeholderText = opts.PlaceholderText or "..."
 			local removeAfterFocusLost = opts.RemoveTextAfterFocusLost == true
+			local elementCanSave = canSaveElement(opts)
 
 			local currentText = checkText(default)
 			if savedData[id] ~= nil then currentText = tostring(savedData[id]) end
@@ -919,8 +849,7 @@ function module:win(config)
 			input.Focused:Connect(function() ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
 			input.FocusLost:Connect(function()
 				ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
-				savedData[id] = input.Text
-				saveConfig()
+				if elementCanSave then savedData[id] = input.Text; saveConfig() end
 				if cb then cb(input.Text) end
 				if removeAfterFocusLost then input.Text = "" end
 			end)
@@ -929,8 +858,7 @@ function module:win(config)
 			function textboxObj:Set(newText, silent)
 				newText = checkText(newText)
 				input.Text = newText
-				savedData[id] = newText
-				saveConfig()
+				if elementCanSave then savedData[id] = newText; saveConfig() end
 				if cb and not silent then cb(newText) end
 			end
 			function textboxObj:Get()
@@ -939,13 +867,15 @@ function module:win(config)
 			return textboxObj
 		end
 
-		function contents:slider(text, id, min, max, default, cb)
+		function contents:slider(text, id, min, max, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "number" then cb = default; default = max; max = min; min = id; id = text end
 			id = tostring(id)
 			min = tonumber(min) or 0
 			max = tonumber(max) or 100
 			default = tonumber(default) or min
+			opts = type(opts) == "table" and opts or {}
+			local elementCanSave = canSaveElement(opts)
 
 			local valStart = default
 			if savedData[id] ~= nil then valStart = tonumber(savedData[id]) or default end
@@ -993,8 +923,7 @@ function module:win(config)
 			ui.InputEnded:Connect(function(input)
 				if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 					sliderDragging = false
-					savedData[id] = lastVal
-					saveConfig()
+					if elementCanSave then savedData[id] = lastVal; saveConfig() end
 					if cb then pcall(cb, lastVal) end
 				end
 			end)
@@ -1010,8 +939,7 @@ function module:win(config)
 				local clampedVal = math.clamp(tonumber(newVal) or min, min, max)
 				local alpha = denom > 0 and ((clampedVal - min) / denom) or 0
 				setFromAlpha(alpha)
-				savedData[id] = lastVal
-				saveConfig()
+				if elementCanSave then savedData[id] = lastVal; saveConfig() end
 				if cb and not silent then pcall(cb, lastVal) end
 			end
 			function sliderObj:Get()
@@ -1020,12 +948,14 @@ function module:win(config)
 			return sliderObj
 		end
 
-		function contents:dropdown(text, id, list, default, cb)
+		function contents:dropdown(text, id, list, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "table" then cb = default; default = list; list = id; id = text end
 			if type(default) == "function" then cb = default; default = nil end
 			id = tostring(id)
 			list = type(list) == "table" and list or {}
+			opts = type(opts) == "table" and opts or {}
+			local elementCanSave = canSaveElement(opts)
 
 			local dropdownOpen = false
 			local currentSelected = default or (list[1] or "...")
@@ -1069,8 +999,7 @@ function module:win(config)
 						currentSelected = val
 						selectedLbl.Text = optionStr
 						dropdownOpen = false
-						savedData[id] = val
-						saveConfig()
+						if elementCanSave then savedData[id] = val; saveConfig() end
 						ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
 						ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, -12, 0, 0) }):Play()
 						indicator.Text = "V"
@@ -1107,6 +1036,7 @@ function module:win(config)
 			id = tostring(id)
 			opts = type(opts) == "table" and opts or {}
 			local holdToInteract = opts.HoldToInteract == true
+			local elementCanSave = canSaveElement(opts)
 
 			local currentKey = default
 			if typeof(currentKey) == "EnumItem" then currentKey = currentKey.Name
@@ -1151,8 +1081,7 @@ function module:win(config)
 						bindBtn.Text = currentKey
 						reg(bindBtn, "TextColor3", "SubText")
 						ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeTransparency }):Play()
-						savedData[id] = currentKey
-						saveConfig()
+						if elementCanSave then savedData[id] = currentKey; saveConfig() end
 					elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
 						listening = false
 						bindBtn.Text = currentKey
@@ -1188,8 +1117,7 @@ function module:win(config)
 				elseif type(newKey) ~= "string" then newKey = "None" end
 				currentKey = newKey
 				bindBtn.Text = currentKey
-				savedData[id] = currentKey
-				saveConfig()
+				if elementCanSave then savedData[id] = currentKey; saveConfig() end
 				if cb and not silent then
 					if holdToInteract then
 						pcall(cb, true)
@@ -1240,6 +1168,7 @@ function module:win(config)
 			local cName = checkText(config.Name or "Color")
 			local id = tostring(config.Flag or cName)
 			local cb = config.Callback
+			local elementCanSave = canSaveElement(config)
 
 			local currentColor = typeof(config.Color) == "Color3" and config.Color or Color3.fromRGB(255, 255, 255)
 			if savedData[id] ~= nil and type(savedData[id]) == "table" then
@@ -1276,8 +1205,7 @@ function module:win(config)
 				currentColor = newColor
 				swatch.BackgroundColor3 = currentColor
 				local r, g, b = currentRGB()
-				savedData[id] = { r, g, b }
-				saveConfig()
+				if elementCanSave then savedData[id] = { r, g, b }; saveConfig() end
 				if fireCb and cb then pcall(cb, currentColor) end
 			end
 
@@ -1320,8 +1248,7 @@ function module:win(config)
 				ui.InputEnded:Connect(function(input)
 					if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 						dragging = false
-						savedData[id] = { currentRGB() }
-						saveConfig()
+						if elementCanSave then savedData[id] = { currentRGB() }; saveConfig() end
 						if cb then pcall(cb, currentColor) end
 					end
 				end)
