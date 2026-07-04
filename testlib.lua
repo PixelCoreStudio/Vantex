@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Updated Keysystem
+    - Updated GetKey System
 ]]
 
 local module = {}
@@ -346,6 +346,41 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- KEY SYSTEM
 	-------------------------------------------------------------------
+
+	-- Tries to actually open a link for the user. Discord invites can be opened
+	-- for real via Discord's local RPC endpoint (same trick as the Discord Invite
+	-- System above, just generalized to pull the invite code out of any discord
+	-- link). For anything else we try a couple of common executor globals, then
+	-- fall back to Roblox's own (often locked-down) browser API. None of this is
+	-- guaranteed to work everywhere, which is why "copy" is always offered too.
+	local function tryOpenLink(link)
+		local discordCode = tostring(link):match("discord%.gg/([%w%-]+)") or tostring(link):match("discord%.com/invite/([%w%-]+)")
+		if discordCode then
+			local requestFunc = request or (syn and syn.request) or (http and http.request)
+			if requestFunc then
+				local ok = pcall(function()
+					requestFunc({
+						Url = "http://127.0.0.1:6463/rpc?v=1",
+						Method = "POST",
+						Headers = { ["Content-Type"] = "application/json", ["Origin"] = "https://discord.com" },
+						Body = hs:JSONEncode({ cmd = "INVITE_BROWSER", nonce = hs:GenerateGUID(false), args = { code = discordCode } })
+					})
+				end)
+				if ok then return true end
+			end
+		end
+
+		for _, name in ipairs({ "openurl", "open_url" }) do
+			local fn = rawget(_G, name)
+			if type(fn) == "function" then
+				local ok = pcall(fn, link)
+				if ok then return true end
+			end
+		end
+
+		return pcall(function() game:GetService("GuiService"):OpenBrowserWindow(link) end)
+	end
+
 	local keyPassed = false
 	local keyClosed = false
 	if config.KeySystem then
@@ -356,9 +391,37 @@ function module:win(config)
 		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
 		local validKeys = keySettings.Key or {"Hello"}
 
-		-- The same URL can be reused both to fetch valid keys (GrabKeyFromSite)
-		-- and as the "Get Key" link shown to the user - no need to set it twice.
-		local keyLink = keySettings.Link or (type(keySettings.Key) == "string" and keySettings.Key or nil)
+		-- GetKey = { "link or text", {"copy", "gotowebsite"}, {"Title", "Content", Duration, Image} }
+		-- 1) the value to copy/open, 2) which button(s) to show, 3) optional Notify config fired on click
+		local getKeyValue, getKeyActions, getKeyNotify
+		if type(keySettings.GetKey) == "table" then
+			getKeyValue = keySettings.GetKey[1]
+			local actionsField = keySettings.GetKey[2]
+			if type(actionsField) == "table" then getKeyActions = actionsField
+			elseif type(actionsField) == "string" then getKeyActions = { actionsField }
+			else getKeyActions = {} end
+			getKeyNotify = type(keySettings.GetKey[3]) == "table" and keySettings.GetKey[3] or nil
+		end
+
+		local wantsCopy, wantsGoto = false, false
+		for _, action in ipairs(getKeyActions or {}) do
+			local a = tostring(action):lower()
+			if a == "copy" then wantsCopy = true end
+			if a == "gotowebsite" or a == "goto" or a == "website" then wantsGoto = true end
+		end
+
+		local hasGetKey = type(getKeyValue) == "string" and getKeyValue ~= "" and (wantsCopy or wantsGoto)
+
+		local function fireGetKeyNotify()
+			if getKeyNotify then
+				module:Notify({
+					Title = getKeyNotify[1],
+					Content = getKeyNotify[2],
+					Duration = getKeyNotify[3],
+					Image = getKeyNotify[4],
+				})
+			end
+		end
 
 		if type(validKeys) == "string" then validKeys = {validKeys} end
 
@@ -381,8 +444,7 @@ function module:win(config)
 		end
 
 		if not keyPassed then
-			local hasLink = type(keyLink) == "string" and keyLink ~= ""
-			local frameHeight = hasLink and 288 or 240
+			local frameHeight = hasGetKey and 288 or 240
 
 			local keyFrame = create("Frame", { Name = "KeySystemOverlay", Parent = screenGui, Size = UDim2.new(0, 350, 0, frameHeight), Position = UDim2.new(0.5, -175, 0.5, -(frameHeight / 2)), BorderSizePixel = 0, ZIndex = 20, ClipsDescendants = false })
 			reg(keyFrame, "BackgroundColor3", "Background")
@@ -411,39 +473,53 @@ function module:win(config)
 			local noteLbl = create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 65), Size = UDim2.new(1, -44, 0, 40), Text = keyNote, TextSize = 11, TextColor3 = theme.SubText, Font = theme.Font, TextWrapped = true })
 
 			local nextY = 110
-			if hasLink then
-				local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
-				reg(openBtn, "BackgroundColor3", "ElementBg")
-				reg(openBtn, "TextColor3", "Text")
-				reg(openBtn, "Font", "Font")
-				create("UICorner", { Parent = openBtn, CornerRadius = theme.ElementRadius })
+			if hasGetKey then
+				local function styleGetKeyBtn(btn)
+					reg(btn, "BackgroundColor3", "ElementBg")
+					reg(btn, "TextColor3", "Text")
+					reg(btn, "Font", "Font")
+					create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
+				end
 
-				local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Link kopieren", TextSize = 12, AutoButtonColor = false })
-				reg(copyBtn, "BackgroundColor3", "ElementBg")
-				reg(copyBtn, "TextColor3", "Text")
-				reg(copyBtn, "Font", "Font")
-				create("UICorner", { Parent = copyBtn, CornerRadius = theme.ElementRadius })
+				if wantsGoto and wantsCopy then
+					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
+					styleGetKeyBtn(openBtn)
+					local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Kopieren", TextSize = 12, AutoButtonColor = false })
+					styleGetKeyBtn(copyBtn)
 
-				openBtn.MouseButton1Click:Connect(function()
-					local ok = pcall(function() game:GetService("GuiService"):OpenBrowserWindow(keyLink) end)
-					if not ok then
+					openBtn.MouseButton1Click:Connect(function()
+						local opened = tryOpenLink(getKeyValue)
+						if not opened then
+							local clip = setclipboard or toclipboard
+							if clip then pcall(clip, getKeyValue) end
+						end
+						fireGetKeyNotify()
+					end)
+					copyBtn.MouseButton1Click:Connect(function()
 						local clip = setclipboard or toclipboard
-						if clip then pcall(clip, keyLink) end
-						module:Notify({ Title = "Konnte Webseite nicht öffnen", Content = "Der Link wurde stattdessen in die Zwischenablage kopiert.", Duration = 4 })
-					else
-						module:Notify({ Title = "Webseite geöffnet", Content = "Der Get-Key-Link wurde geöffnet.", Duration = 3 })
-					end
-				end)
-
-				copyBtn.MouseButton1Click:Connect(function()
-					local clip = setclipboard or toclipboard
-					local ok = clip and pcall(clip, keyLink)
-					if ok then
-						module:Notify({ Title = "Link kopiert", Content = "Der Get-Key-Link wurde in die Zwischenablage kopiert.", Duration = 3 })
-					else
-						module:Notify({ Title = "Kopieren fehlgeschlagen", Content = "Dein Executor unterstützt setclipboard nicht.", Duration = 4 })
-					end
-				end)
+						if clip then pcall(clip, getKeyValue) end
+						fireGetKeyNotify()
+					end)
+				elseif wantsGoto then
+					local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
+					styleGetKeyBtn(openBtn)
+					openBtn.MouseButton1Click:Connect(function()
+						local opened = tryOpenLink(getKeyValue)
+						if not opened then
+							local clip = setclipboard or toclipboard
+							if clip then pcall(clip, getKeyValue) end
+						end
+						fireGetKeyNotify()
+					end)
+				elseif wantsCopy then
+					local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = "Kopieren", TextSize = 12, AutoButtonColor = false })
+					styleGetKeyBtn(copyBtn)
+					copyBtn.MouseButton1Click:Connect(function()
+						local clip = setclipboard or toclipboard
+						if clip then pcall(clip, getKeyValue) end
+						fireGetKeyNotify()
+					end)
+				end
 
 				nextY = nextY + 42
 			end
@@ -468,7 +544,6 @@ function module:win(config)
 				if match then
 					if keySettings.SaveKey and writefile then writefile(folderName .. "/" .. keyFileName, text) end
 					keyPassed = true
-					module:Notify({ Title = "Zugriff gewährt", Content = "Der Key war korrekt.", Duration = 3 })
 					ts:Create(keyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, frameHeight + 20), Position = UDim2.new(0.5, -185, 0.5, -(frameHeight + 20) / 2) }):Play()
 					for _, child in ipairs(keyFrame:GetDescendants()) do
 						if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("TextButton") then ts:Create(child, TweenInfo.new(0.2), { Transparency = 1 }):Play() end
@@ -479,7 +554,6 @@ function module:win(config)
 					keyInput.Text = ""
 					keyInput.PlaceholderText = "Invalid Key! Try Again."
 					noteLbl.TextColor3 = Color3.fromRGB(255, 50, 50)
-					module:Notify({ Title = "Falscher Key", Content = "Der eingegebene Key ist ungültig.", Duration = 3 })
 					task.delay(2, function() if noteLbl and noteLbl.Parent then noteLbl.TextColor3 = theme.SubText end end)
 				end
 			end)
