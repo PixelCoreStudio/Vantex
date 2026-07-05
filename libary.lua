@@ -1,9 +1,14 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Updated Keysystem
+    - Updated Themes
 ]]
 
 local module = {}
+
+-- Fixed folder that hosts individual theme files (see themes/default.lua for the
+-- template). Update this once to point at your own repo's "themes" folder - end
+-- users of your script never set this themselves, they only pass Theme = "name".
+local THEMES_FOLDER = "https://raw.githubusercontent.com/PixelCoreStudio/VoidLibary/refs/heads/main/themes/"
 
 local ts = cloneref(game:GetService("TweenService"))
 local cg = cloneref(game:GetService("CoreGui"))
@@ -266,6 +271,26 @@ function module:win(config)
 	
 	local theme = {}
 	for k, v in pairs(module.Theme) do theme[k] = v end
+
+	-- Theme = "somename" checks THEMES_FOLDER (a fixed URL near the top of this file)
+	-- for a matching "somename.lua" and uses it if found, otherwise silently falls
+	-- back to the built-in default theme. Theme = "Custom" (or omitted) skips this
+	-- entirely and relies only on ThemeOverrides below, which still applies on top
+	-- either way.
+	local themeName = config.Theme
+	if type(themeName) == "string" and themeName ~= "" and themeName:lower() ~= "custom" then
+		local ok, result = pcall(function()
+			local src = game:HttpGet(THEMES_FOLDER .. themeName .. ".lua")
+			local themeFn = loadstring(src)
+			return themeFn and themeFn()
+		end)
+		if ok and type(result) == "table" then
+			for k, v in pairs(result) do theme[k] = v end
+		end
+		-- if it failed (theme doesn't exist / no internet / bad file), theme just
+		-- stays as the built-in default copied above - no error, no warning spam.
+	end
+
 	if config.ThemeOverrides then
 		for k, v in pairs(config.ThemeOverrides) do theme[k] = v end
 	end
@@ -284,7 +309,15 @@ function module:win(config)
 	-------------------------------------------------------------------
 	local cfgSettings = config.ConfigurationSaving or { Enabled = false }
 	local isSavingEnabled = (cfgSettings.Enabled == true or cfgSettings.Enable == true)
-	
+
+	-- When All is true (default), every element with an id gets saved automatically,
+	-- exactly like before. When explicitly set to false, only elements that were
+	-- created with `Save = true` in their own config/opts get persisted.
+	local saveAll = (cfgSettings.All ~= false)
+	local function canSaveElement(opts)
+		return saveAll or (type(opts) == "table" and opts.Save == true)
+	end
+
 	local savedData = {}
 	local folderName = cfgSettings.FolderName or "CustomUILocks"
 	local fileName = (cfgSettings.FileName or "Big Hub") .. ".json"
@@ -346,6 +379,7 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- KEY SYSTEM
 	-------------------------------------------------------------------
+
 	local keyPassed = false
 	local keyClosed = false
 	if config.KeySystem then
@@ -356,18 +390,44 @@ function module:win(config)
 		local keyFileName = (keySettings.FileName or "Key") .. ".txt"
 		local validKeys = keySettings.Key or {"Hello"}
 
-		-- The same URL can be reused both to fetch valid keys (GrabKeyFromSite)
-		-- and as the "Get Key" link shown to the user - no need to set it twice.
-		local keyLink = keySettings.Link or (type(keySettings.Key) == "string" and keySettings.Key or nil)
+		-- GetKey = { "link or text", { copy = { Text = "...", Notify = {Title, Content, Duration, Image} } } }
+		-- Only "copy" is supported (opening arbitrary websites isn't reliably possible from a Roblox script).
+		local getKeyValue, getKeyOptions = nil, {}
+		if type(keySettings.GetKey) == "table" then
+			getKeyValue = keySettings.GetKey[1]
+			if type(keySettings.GetKey[2]) == "table" then getKeyOptions = keySettings.GetKey[2] end
+		end
+
+		local copyOpts = type(getKeyOptions.copy) == "table" and getKeyOptions.copy or nil
+		local hasGetKey = type(getKeyValue) == "string" and getKeyValue ~= "" and copyOpts
+
+		local function fireNotify(notifyCfg)
+			if type(notifyCfg) == "table" then
+				module:Notify({
+					Title = notifyCfg[1],
+					Content = notifyCfg[2],
+					Duration = notifyCfg[3],
+					Image = notifyCfg[4],
+				})
+			end
+		end
 
 		if type(validKeys) == "string" then validKeys = {validKeys} end
 
-		if keySettings.GrabKeyFromSite and keySettings.Key and type(keySettings.Key) == "string" then
+		-- LinkToKey = "https://.../key.txt" - fetches the valid key(s) from a remote
+		-- text file instead of (or in addition to) hardcoding them in the script.
+		-- One key per line; empty lines are ignored. If the fetch fails, the
+		-- hardcoded `Key` list above is used as a fallback.
+		if type(keySettings.LinkToKey) == "string" and keySettings.LinkToKey ~= "" then
 			pcall(function()
-				local success, res = pcall(game.HttpGet, game, keySettings.Key)
-				if success then
-					validKeys = {}
-					for line in res:gmatch("[^\r\n]+") do table.insert(validKeys, line) end
+				local success, res = pcall(game.HttpGet, game, keySettings.LinkToKey)
+				if success and type(res) == "string" then
+					local fetchedKeys = {}
+					for line in res:gmatch("[^\r\n]+") do
+						line = line:match("^%s*(.-)%s*$")
+						if line ~= "" then table.insert(fetchedKeys, line) end
+					end
+					if #fetchedKeys > 0 then validKeys = fetchedKeys end
 				end
 			end)
 		end
@@ -381,8 +441,7 @@ function module:win(config)
 		end
 
 		if not keyPassed then
-			local hasLink = type(keyLink) == "string" and keyLink ~= ""
-			local frameHeight = hasLink and 288 or 240
+			local frameHeight = hasGetKey and 288 or 240
 
 			local keyFrame = create("Frame", { Name = "KeySystemOverlay", Parent = screenGui, Size = UDim2.new(0, 350, 0, frameHeight), Position = UDim2.new(0.5, -175, 0.5, -(frameHeight / 2)), BorderSizePixel = 0, ZIndex = 20, ClipsDescendants = false })
 			reg(keyFrame, "BackgroundColor3", "Background")
@@ -411,38 +470,16 @@ function module:win(config)
 			local noteLbl = create("TextLabel", { Parent = keyFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 65), Size = UDim2.new(1, -44, 0, 40), Text = keyNote, TextSize = 11, TextColor3 = theme.SubText, Font = theme.Font, TextWrapped = true })
 
 			local nextY = 110
-			if hasLink then
-				local openBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Zur Webseite", TextSize = 12, AutoButtonColor = false })
-				reg(openBtn, "BackgroundColor3", "ElementBg")
-				reg(openBtn, "TextColor3", "Text")
-				reg(openBtn, "Font", "Font")
-				create("UICorner", { Parent = openBtn, CornerRadius = theme.ElementRadius })
-
-				local copyBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, nextY), Size = UDim2.new(0.5, -24, 0, 32), Text = "Link kopieren", TextSize = 12, AutoButtonColor = false })
+			if hasGetKey then
+				local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
 				reg(copyBtn, "BackgroundColor3", "ElementBg")
 				reg(copyBtn, "TextColor3", "Text")
 				reg(copyBtn, "Font", "Font")
 				create("UICorner", { Parent = copyBtn, CornerRadius = theme.ElementRadius })
-
-				openBtn.MouseButton1Click:Connect(function()
-					local ok = pcall(function() game:GetService("GuiService"):OpenBrowserWindow(keyLink) end)
-					if not ok then
-						local clip = setclipboard or toclipboard
-						if clip then pcall(clip, keyLink) end
-						module:Notify({ Title = "Konnte Webseite nicht öffnen", Content = "Der Link wurde stattdessen in die Zwischenablage kopiert.", Duration = 4 })
-					else
-						module:Notify({ Title = "Webseite geöffnet", Content = "Der Get-Key-Link wurde geöffnet.", Duration = 3 })
-					end
-				end)
-
 				copyBtn.MouseButton1Click:Connect(function()
 					local clip = setclipboard or toclipboard
-					local ok = clip and pcall(clip, keyLink)
-					if ok then
-						module:Notify({ Title = "Link kopiert", Content = "Der Get-Key-Link wurde in die Zwischenablage kopiert.", Duration = 3 })
-					else
-						module:Notify({ Title = "Kopieren fehlgeschlagen", Content = "Dein Executor unterstützt setclipboard nicht.", Duration = 4 })
-					end
+					if clip then pcall(clip, getKeyValue) end
+					fireNotify(copyOpts.Notify)
 				end)
 
 				nextY = nextY + 42
@@ -468,7 +505,6 @@ function module:win(config)
 				if match then
 					if keySettings.SaveKey and writefile then writefile(folderName .. "/" .. keyFileName, text) end
 					keyPassed = true
-					module:Notify({ Title = "Zugriff gewährt", Content = "Der Key war korrekt.", Duration = 3 })
 					ts:Create(keyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = UDim2.new(0, 370, 0, frameHeight + 20), Position = UDim2.new(0.5, -185, 0.5, -(frameHeight + 20) / 2) }):Play()
 					for _, child in ipairs(keyFrame:GetDescendants()) do
 						if child:IsA("TextLabel") or child:IsA("Frame") or child:IsA("TextButton") then ts:Create(child, TweenInfo.new(0.2), { Transparency = 1 }):Play() end
@@ -479,7 +515,6 @@ function module:win(config)
 					keyInput.Text = ""
 					keyInput.PlaceholderText = "Invalid Key! Try Again."
 					noteLbl.TextColor3 = Color3.fromRGB(255, 50, 50)
-					module:Notify({ Title = "Falscher Key", Content = "Der eingegebene Key ist ungültig.", Duration = 3 })
 					task.delay(2, function() if noteLbl and noteLbl.Parent then noteLbl.TextColor3 = theme.SubText end end)
 				end
 			end)
@@ -495,9 +530,44 @@ function module:win(config)
 	end
 
 	-------------------------------------------------------------------
+	-- LAYOUT: TABS POSITION & WINDOW SIZE
+	-------------------------------------------------------------------
+	-- TabsPosition = "Left" (default, sidebar like before) or "Top" (horizontal tab row
+	-- under the topbar, Rayfield-style minimal layout). Everything else (window size
+	-- defaults, tab bar orientation, content area) adapts automatically to this choice.
+	local tabsPosition = (config.TabsPosition == "Top") and "Top" or "Left"
+
+	-- WindowSize: leave unset (or "Default") for a size preset that matches TabsPosition,
+	-- or pass a table { Width = ..., Height = ... } for a fully custom size. Everything
+	-- (tab bar, content area, centering) automatically adapts to whatever size is chosen.
+	local defaultWindowDims = {
+		Left = { 550, 350 },
+		Top = { 620, 400 },
+	}
+	local windowWidth, windowHeight
+	if type(config.WindowSize) == "table" and (config.WindowSize.Width or config.WindowSize.Height) then
+		local d = defaultWindowDims[tabsPosition]
+		windowWidth = tonumber(config.WindowSize.Width) or d[1]
+		windowHeight = tonumber(config.WindowSize.Height) or d[2]
+	else
+		local d = defaultWindowDims[tabsPosition]
+		windowWidth, windowHeight = d[1], d[2]
+	end
+	local windowSize = UDim2.new(0, windowWidth, 0, windowHeight)
+
+	-- Auto-center for whatever size was picked, unless the caller explicitly set a
+	-- custom WindowPosition via ThemeOverrides (in which case we respect that instead).
+	local windowPosition = theme.WindowPosition
+	if not (config.ThemeOverrides and config.ThemeOverrides.WindowPosition) then
+		windowPosition = UDim2.new(0.5, -windowWidth / 2, 0.5, -windowHeight / 2)
+	end
+
+	local tabBarSize = 44 -- height of the horizontal tab row when TabsPosition == "Top"
+
+	-------------------------------------------------------------------
 	-- MAIN UI WINDOW
 	-------------------------------------------------------------------
-	local main = create("Frame", { Name = "Frame", Parent = screenGui, Size = theme.WindowSize, Position = theme.WindowPosition, BorderSizePixel = 0, ClipsDescendants = true, Visible = false })
+	local main = create("Frame", { Name = "Frame", Parent = screenGui, Size = windowSize, Position = windowPosition, BorderSizePixel = 0, ClipsDescendants = true, Visible = false })
 	reg(main, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = main, CornerRadius = theme.CornerRadius })
 
@@ -603,13 +673,26 @@ function module:win(config)
 	makeDraggable(main, topbar)
 
 	local body = create("Frame", { Name = "body", Parent = main, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, theme.TopbarHeight), Size = UDim2.new(1, 0, 1, -theme.TopbarHeight) })
-	local tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(0, theme.TabBarWidth, 1, 0), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3 })
-	reg(tabBar, "BackgroundColor3", "TabBar")
-	reg(tabBar, "ScrollBarImageColor3", "Accent")
-	create("UIListLayout", { Parent = tabBar, Padding = UDim.new(0, 4) })
-	create("UIPadding", { Parent = tabBar, PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
 
-	local sectionsHolder = create("Frame", { Name = "sectionsholder", Parent = body, BackgroundTransparency = 1, Position = UDim2.new(0, theme.TabBarWidth, 0, 0), Size = UDim2.new(1, -theme.TabBarWidth, 1, 0), ClipsDescendants = true })
+	local tabBar, sectionsHolder
+	if tabsPosition == "Top" then
+		tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(1, 0, 0, tabBarSize), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 3 })
+		reg(tabBar, "BackgroundColor3", "TabBar")
+		reg(tabBar, "ScrollBarImageColor3", "Accent")
+		create("UIListLayout", { Parent = tabBar, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center })
+		create("UIPadding", { Parent = tabBar, PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) })
+
+		sectionsHolder = create("Frame", { Name = "sectionsholder", Parent = body, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, tabBarSize), Size = UDim2.new(1, 0, 1, -tabBarSize), ClipsDescendants = true })
+	else
+		tabBar = create("ScrollingFrame", { Name = "tabbar", Parent = body, BorderSizePixel = 0, BackgroundTransparency = theme.PanelTransparency, Size = UDim2.new(0, theme.TabBarWidth, 1, 0), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3 })
+		reg(tabBar, "BackgroundColor3", "TabBar")
+		reg(tabBar, "ScrollBarImageColor3", "Accent")
+		create("UIListLayout", { Parent = tabBar, Padding = UDim.new(0, 4) })
+		create("UIPadding", { Parent = tabBar, PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) })
+
+		sectionsHolder = create("Frame", { Name = "sectionsholder", Parent = body, BackgroundTransparency = 1, Position = UDim2.new(0, theme.TabBarWidth, 0, 0), Size = UDim2.new(1, -theme.TabBarWidth, 1, 0), ClipsDescendants = true })
+	end
+
 	local sections = {}
 	local curBtn, curSection = nil, nil
 
@@ -634,18 +717,28 @@ function module:win(config)
 
 	function sections:tab(title, icon)
 		title = checkText(title)
-		local btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+		local btn
+		if tabsPosition == "Top" then
+			btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(0, 130, 1, 0), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+		else
+			btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
+		end
 		reg(btn, "BackgroundColor3", "ElementBg")
 		create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
 
 		local glow = create("UIStroke", { Name = "glow", Parent = btn, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 		reg(glow, "Color", "Accent")
 
-		local indicator = create("Frame", { Name = "indicator", Parent = btn, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 3, 0.6, 0), BackgroundTransparency = 1, BorderSizePixel = 0 })
+		local indicator
+		if tabsPosition == "Top" then
+			indicator = create("Frame", { Name = "indicator", Parent = btn, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(0.6, 0, 0, 3), BackgroundTransparency = 1, BorderSizePixel = 0 })
+		else
+			indicator = create("Frame", { Name = "indicator", Parent = btn, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 3, 0.6, 0), BackgroundTransparency = 1, BorderSizePixel = 0 })
+		end
 		reg(indicator, "BackgroundColor3", "Accent")
 		create("UICorner", { Parent = indicator, CornerRadius = UDim.new(1, 0) })
 
-		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, 36, 0, 0), Size = UDim2.new(1, -44, 1, 0), Text = title, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+		local label = create("TextLabel", { Parent = btn, BackgroundTransparency = 1, Position = UDim2.new(0, 36, 0, 0), Size = UDim2.new(1, -44, 1, 0), Text = title, TextSize = 13, TextXAlignment = tabsPosition == "Top" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left })
 		reg(label, "TextColor3", "Text")
 		reg(label, "Font", "Font")
 
@@ -657,6 +750,7 @@ function module:win(config)
 			if not applyIconToLabel(tabIconLbl, icon) then
 				tabIconLbl.Visible = false
 				label.Position = UDim2.new(0, 12, 0, 0)
+				label.Size = UDim2.new(1, -24, 1, 0)
 			end
 		end)
 
@@ -751,10 +845,12 @@ function module:win(config)
 			return btnObj
 		end
 
-		function contents:toggle(text, id, default, cb)
+		function contents:toggle(text, id, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "boolean" or type(id) == "nil" then cb = default; default = id; id = text end
 			id = tostring(id)
+			opts = type(opts) == "table" and opts or {}
+			local elementCanSave = canSaveElement(opts)
 
 			local toggled = default and true or false
 			if savedData[id] ~= nil then toggled = savedData[id] end
@@ -801,8 +897,7 @@ function module:win(config)
 
 			holder.MouseButton1Click:Connect(function()
 				toggled = not toggled
-				savedData[id] = toggled
-				saveConfig()
+				if elementCanSave then savedData[id] = toggled; saveConfig() end
 				applyVisual(true)
 				if cb then cb(toggled) end
 			end)
@@ -810,8 +905,7 @@ function module:win(config)
 			local toggleObj = { Instance = holder }
 			function toggleObj:Set(newVal, silent)
 				toggled = newVal and true or false
-				savedData[id] = toggled
-				saveConfig()
+				if elementCanSave then savedData[id] = toggled; saveConfig() end
 				applyVisual(true)
 				if cb and not silent then cb(toggled) end
 			end
@@ -830,6 +924,7 @@ function module:win(config)
 			opts = type(opts) == "table" and opts or {}
 			local placeholderText = opts.PlaceholderText or "..."
 			local removeAfterFocusLost = opts.RemoveTextAfterFocusLost == true
+			local elementCanSave = canSaveElement(opts)
 
 			local currentText = checkText(default)
 			if savedData[id] ~= nil then currentText = tostring(savedData[id]) end
@@ -856,8 +951,7 @@ function module:win(config)
 			input.Focused:Connect(function() ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
 			input.FocusLost:Connect(function()
 				ts:Create(focusGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play()
-				savedData[id] = input.Text
-				saveConfig()
+				if elementCanSave then savedData[id] = input.Text; saveConfig() end
 				if cb then cb(input.Text) end
 				if removeAfterFocusLost then input.Text = "" end
 			end)
@@ -866,8 +960,7 @@ function module:win(config)
 			function textboxObj:Set(newText, silent)
 				newText = checkText(newText)
 				input.Text = newText
-				savedData[id] = newText
-				saveConfig()
+				if elementCanSave then savedData[id] = newText; saveConfig() end
 				if cb and not silent then cb(newText) end
 			end
 			function textboxObj:Get()
@@ -876,13 +969,15 @@ function module:win(config)
 			return textboxObj
 		end
 
-		function contents:slider(text, id, min, max, default, cb)
+		function contents:slider(text, id, min, max, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "number" then cb = default; default = max; max = min; min = id; id = text end
 			id = tostring(id)
 			min = tonumber(min) or 0
 			max = tonumber(max) or 100
 			default = tonumber(default) or min
+			opts = type(opts) == "table" and opts or {}
+			local elementCanSave = canSaveElement(opts)
 
 			local valStart = default
 			if savedData[id] ~= nil then valStart = tonumber(savedData[id]) or default end
@@ -930,8 +1025,7 @@ function module:win(config)
 			ui.InputEnded:Connect(function(input)
 				if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 					sliderDragging = false
-					savedData[id] = lastVal
-					saveConfig()
+					if elementCanSave then savedData[id] = lastVal; saveConfig() end
 					if cb then pcall(cb, lastVal) end
 				end
 			end)
@@ -947,8 +1041,7 @@ function module:win(config)
 				local clampedVal = math.clamp(tonumber(newVal) or min, min, max)
 				local alpha = denom > 0 and ((clampedVal - min) / denom) or 0
 				setFromAlpha(alpha)
-				savedData[id] = lastVal
-				saveConfig()
+				if elementCanSave then savedData[id] = lastVal; saveConfig() end
 				if cb and not silent then pcall(cb, lastVal) end
 			end
 			function sliderObj:Get()
@@ -957,12 +1050,14 @@ function module:win(config)
 			return sliderObj
 		end
 
-		function contents:dropdown(text, id, list, default, cb)
+		function contents:dropdown(text, id, list, default, cb, opts)
 			text = checkText(text)
 			if type(id) == "table" then cb = default; default = list; list = id; id = text end
 			if type(default) == "function" then cb = default; default = nil end
 			id = tostring(id)
 			list = type(list) == "table" and list or {}
+			opts = type(opts) == "table" and opts or {}
+			local elementCanSave = canSaveElement(opts)
 
 			local dropdownOpen = false
 			local currentSelected = default or (list[1] or "...")
@@ -1006,8 +1101,7 @@ function module:win(config)
 						currentSelected = val
 						selectedLbl.Text = optionStr
 						dropdownOpen = false
-						savedData[id] = val
-						saveConfig()
+						if elementCanSave then savedData[id] = val; saveConfig() end
 						ts:Create(holder, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, theme.ElementHeight) }):Play()
 						ts:Create(container, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.new(1, -12, 0, 0) }):Play()
 						indicator.Text = "V"
@@ -1044,6 +1138,7 @@ function module:win(config)
 			id = tostring(id)
 			opts = type(opts) == "table" and opts or {}
 			local holdToInteract = opts.HoldToInteract == true
+			local elementCanSave = canSaveElement(opts)
 
 			local currentKey = default
 			if typeof(currentKey) == "EnumItem" then currentKey = currentKey.Name
@@ -1088,8 +1183,7 @@ function module:win(config)
 						bindBtn.Text = currentKey
 						reg(bindBtn, "TextColor3", "SubText")
 						ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeTransparency }):Play()
-						savedData[id] = currentKey
-						saveConfig()
+						if elementCanSave then savedData[id] = currentKey; saveConfig() end
 					elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
 						listening = false
 						bindBtn.Text = currentKey
@@ -1125,8 +1219,7 @@ function module:win(config)
 				elseif type(newKey) ~= "string" then newKey = "None" end
 				currentKey = newKey
 				bindBtn.Text = currentKey
-				savedData[id] = currentKey
-				saveConfig()
+				if elementCanSave then savedData[id] = currentKey; saveConfig() end
 				if cb and not silent then
 					if holdToInteract then
 						pcall(cb, true)
@@ -1177,6 +1270,7 @@ function module:win(config)
 			local cName = checkText(config.Name or "Color")
 			local id = tostring(config.Flag or cName)
 			local cb = config.Callback
+			local elementCanSave = canSaveElement(config)
 
 			local currentColor = typeof(config.Color) == "Color3" and config.Color or Color3.fromRGB(255, 255, 255)
 			if savedData[id] ~= nil and type(savedData[id]) == "table" then
@@ -1213,8 +1307,7 @@ function module:win(config)
 				currentColor = newColor
 				swatch.BackgroundColor3 = currentColor
 				local r, g, b = currentRGB()
-				savedData[id] = { r, g, b }
-				saveConfig()
+				if elementCanSave then savedData[id] = { r, g, b }; saveConfig() end
 				if fireCb and cb then pcall(cb, currentColor) end
 			end
 
@@ -1257,8 +1350,7 @@ function module:win(config)
 				ui.InputEnded:Connect(function(input)
 					if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 						dragging = false
-						savedData[id] = { currentRGB() }
-						saveConfig()
+						if elementCanSave then savedData[id] = { currentRGB() }; saveConfig() end
 						if cb then pcall(cb, currentColor) end
 					end
 				end)
@@ -1320,7 +1412,7 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- LOADING SCREEN OVERLAY
 	-------------------------------------------------------------------
-	local loadingFrame = create("Frame", { Name = "LoadingOverlay", Parent = screenGui, Size = theme.WindowSize, Position = theme.WindowPosition, BorderSizePixel = 0, ZIndex = 10 })
+	local loadingFrame = create("Frame", { Name = "LoadingOverlay", Parent = screenGui, Size = windowSize, Position = windowPosition, BorderSizePixel = 0, ZIndex = 10 })
 	reg(loadingFrame, "BackgroundColor3", "Background")
 	create("UICorner", { Parent = loadingFrame, CornerRadius = theme.CornerRadius })
 	
@@ -1361,7 +1453,7 @@ function module:win(config)
 
 		main.Visible = true
 
-		local fadeTween = ts:Create(loadingFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = theme.WindowSize + UDim2.new(0, 40, 0, 40), Position = theme.WindowPosition - UDim2.new(0, 20, 0, 20) })
+		local fadeTween = ts:Create(loadingFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1, Size = windowSize + UDim2.new(0, 40, 0, 40), Position = windowPosition - UDim2.new(0, 20, 0, 20) })
 		ts:Create(loadLogo, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
 		ts:Create(loadTitleLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
 		ts:Create(loadSubLbl, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
