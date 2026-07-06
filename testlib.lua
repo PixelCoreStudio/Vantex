@@ -1435,7 +1435,7 @@ function module:win(config)
 	local loadStroke = create("UIStroke", { Parent = loadingFrame, Thickness = 1, Transparency = theme.WindowStrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 	reg(loadStroke, "Color", "Accent")
 
-	local loadLogo = create("ImageLabel", { Name = "VoidCoreLogo", Parent = loadingFrame, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 35), Size = UDim2.new(0, 110, 0, 110), Image = "rbxassetid://140071513873333" })
+	local loadLogo = create("ImageLabel", { Name = "VoidCoreLogo", Parent = loadingFrame, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 35), Size = UDim2.new(0, 110, 0, 110), Image = "rbxassetid://108600397093327" })
 	local loadTitleLbl = create("TextLabel", { Parent = loadingFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 160), Size = UDim2.new(1, 0, 0, 30), Text = loadingTitle, TextSize = 22 })
 	reg(loadTitleLbl, "TextColor3", "Text")
 	reg(loadTitleLbl, "Font", "FontBold")
