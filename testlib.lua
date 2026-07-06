@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Fixed Themes loading
+    - Themes Fix Try 1
 ]]
 
 local module = {}
@@ -280,8 +280,10 @@ function module:win(config)
 	local themeName = config.Theme
 	if type(themeName) == "string" and themeName ~= "" and themeName:lower() ~= "custom" then
 		local themeUrl = THEMES_FOLDER .. themeName .. ".lua"
+		print("[VoidLib] Attempting to load theme '" .. themeName .. "' from: " .. themeUrl)
 		local ok, result = pcall(function()
 			local src = game:HttpGet(themeUrl)
+			print("[VoidLib] HttpGet succeeded, response length: " .. tostring(#src))
 			src = src:gsub("^\239\187\191", "") -- strip a UTF-8 BOM if present, it breaks loadstring
 			local themeFn, err = loadstring(src)
 			if not themeFn then
@@ -290,10 +292,13 @@ function module:win(config)
 			return themeFn()
 		end)
 		if ok and type(result) == "table" then
+			print("[VoidLib] Theme '" .. themeName .. "' loaded and applied successfully.")
 			for k, v in pairs(result) do theme[k] = v end
 		else
-			warn("VoidLib | Failed to load theme '" .. tostring(themeName) .. "' from " .. themeUrl .. " -> " .. tostring(result) .. " (falling back to the default theme)")
+			warn("[VoidLib] Failed to load theme '" .. themeName .. "' from " .. themeUrl .. " -> " .. tostring(result) .. " (falling back to the default theme)")
 		end
+	else
+		print("[VoidLib] No named theme requested (config.Theme = " .. tostring(themeName) .. "), using default/ThemeOverrides only.")
 	end
 
 	if config.ThemeOverrides then
