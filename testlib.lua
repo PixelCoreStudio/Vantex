@@ -1,6 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Themes Fix Try 1
+    - Theme Fix Try 2
 ]]
 
 local module = {}
@@ -303,6 +303,17 @@ function module:win(config)
 
 	if config.ThemeOverrides then
 		for k, v in pairs(config.ThemeOverrides) do theme[k] = v end
+	end
+
+	-- IMPORTANT: shadow the module-level reg() with one that reads from THIS
+	-- window's theme table (including ThemeOverrides / a loaded named theme),
+	-- instead of the global module.Theme default. Every element-creation
+	-- function below is defined inside this function, so they all pick up
+	-- this local version instead of the outer one.
+	local function reg(instance, property, themeKey)
+		if instance and theme[themeKey] then
+			instance[property] = theme[themeKey]
+		end
 	end
 
 	local screenGui = create("ScreenGui", {
