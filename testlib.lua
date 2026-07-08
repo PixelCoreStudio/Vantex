@@ -755,6 +755,10 @@ function module:win(config)
 
 	makeDraggable(main, topbar)
 
+	main:GetPropertyChangedSignal("Position"):Connect(function()
+		windowShadow.Position = main.Position + UDim2.new(0, windowWidth / 2 + 4, 0, windowHeight / 2 + 6)
+	end)
+
 	local body = create("Frame", { Name = "body", Parent = main, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, theme.TopbarHeight), Size = UDim2.new(1, 0, 1, -theme.TopbarHeight) })
 
 	local tabBar, sectionsHolder
