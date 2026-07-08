@@ -644,7 +644,7 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- MAIN UI WINDOW
 	-------------------------------------------------------------------
-	local windowShadow = create("Frame", { Name = "Shadow", Parent = main, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(1, 8, 1, 8), Position = UDim2.new(0.5, 4, 0.5, 4), BorderSizePixel = 0, ZIndex = -1, Visible = false })
+	local windowShadow = create("Frame", { Name = "Shadow", Parent = screenGui, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, windowWidth + 4, 0, windowHeight + 4), Position = windowPosition + UDim2.new(0, windowWidth / 2 + 4, 0, windowHeight / 2 + 6), BorderSizePixel = 0, ZIndex = -1, Visible = false })
 	reg(windowShadow, "BackgroundColor3", "Shadow")
 	windowShadow.BackgroundTransparency = theme.ShadowTransparency
 	create("UICorner", { Parent = windowShadow, CornerRadius = theme.CornerRadius })
