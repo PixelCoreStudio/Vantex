@@ -1,9 +1,6 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Rayfield-Lucide Spritesheet Support (Topbar, Tabs & Mobile Button)
-    - Fully Draggable Mobile Button & Main Window
-    - Configuration Saving & Auto-Load System
-    - Built-in Discord Invite & Key System Handles
+    - Fixed win
 ]]
 
 local module = {}
@@ -687,7 +684,7 @@ function module:win(config)
 	-------------------------------------------------------------------
 	-- MOBILE RE-OPEN BUTTON (touch devices only)
 	-------------------------------------------------------------------
-	local isMobile = ui:IsVREnabled() == false and ui.TouchEnabled and not ui.MouseEnabled
+	local isMobile = (not pcall(function() return ui:IsVREnabled() end) or not ui:IsVREnabled()) and ui.TouchEnabled and not ui.MouseEnabled
 	local mobileBtn = create("TextButton", { Name = "MobileOpenButton", Parent = screenGui, Size = UDim2.new(0, 100, 0, 32), Position = UDim2.new(1, -115, 1, -45), AutoButtonColor = false, Text = "", Visible = false })
 	reg(mobileBtn, "BackgroundColor3", "Topbar")
 	create("UICorner", { Parent = mobileBtn, CornerRadius = UDim.new(0, 6) })
