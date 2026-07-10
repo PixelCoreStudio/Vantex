@@ -1,6 +1,9 @@
 --[[
     VoidLib Custom UI Library - FULL COMPLETED VERSION
-    - Fixed win
+    - Rayfield-Lucide Spritesheet Support (Topbar, Tabs & Mobile Button)
+    - Fully Draggable Mobile Button & Main Window
+    - Configuration Saving & Auto-Load System
+    - Built-in Discord Invite & Key System Handles
 ]]
 
 local module = {}
@@ -290,7 +293,7 @@ function module:Notify(config)
 	reg(titleLbl, "Font", "FontBold")
 
 	local contentLbl = create("TextLabel", { Parent = card, BackgroundTransparency = 1, Position = UDim2.new(0, textOffset, 0, 20), Size = UDim2.new(1, -textOffset, 0, 16), Text = notifContent, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y })
-	reg(contentLbl, "TextColor3", "SubText")
+	reg(contentLbl, "TextColor3", "SubTextColor")
 	reg(contentLbl, "Font", "Font")
 
 	card.BackgroundTransparency = 1
@@ -529,10 +532,10 @@ function module:win(config)
 			-- Close button (top-right corner) - fully shuts the key window AND aborts
 			-- the rest of the window setup, so the caller's script doesn't error out.
 			local closeBtn = create("TextButton", { Parent = keyFrame, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.new(0, 24, 0, 24), Text = "X", TextSize = 14, BackgroundTransparency = 1, AutoButtonColor = false, ZIndex = 21 })
-			reg(closeBtn, "TextColor3", "SubText")
+			reg(closeBtn, "TextColor3", "SubTextColor")
 			reg(closeBtn, "Font", "FontBold")
 			closeBtn.MouseEnter:Connect(function() ts:Create(closeBtn, TweenInfo.new(0.15), { TextColor3 = Color3.fromRGB(255, 80, 80) }):Play() end)
-			closeBtn.MouseLeave:Connect(function() reg(closeBtn, "TextColor3", "SubText") end)
+			closeBtn.MouseLeave:Connect(function() reg(closeBtn, "TextColor3", "SubTextColor") end)
 			closeBtn.MouseButton1Click:Connect(function()
 				keyClosed = true
 				keyFrame:Destroy()
@@ -545,7 +548,7 @@ function module:win(config)
 			local nextY = 110
 			if hasGetKey then
 				local copyBtn = create("TextButton", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 32), Text = copyOpts.Text or "Kopieren", TextSize = 12, AutoButtonColor = false })
-				reg(copyBtn, "BackgroundColor3", "ElementBg")
+				reg(copyBtn, "BackgroundColor3", "ElementBackground")
 				reg(copyBtn, "TextColor3", "Text")
 				reg(copyBtn, "Font", "Font")
 				create("UICorner", { Parent = copyBtn, CornerRadius = theme.ElementRadius })
@@ -559,7 +562,7 @@ function module:win(config)
 			end
 
 			local inputBg = create("Frame", { Parent = keyFrame, Position = UDim2.new(0, 20, 0, nextY), Size = UDim2.new(1, -44, 0, 36) })
-			reg(inputBg, "BackgroundColor3", "ElementBg")
+			reg(inputBg, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = inputBg, CornerRadius = theme.ElementRadius })
 
 			local keyInput = create("TextBox", { Parent = inputBg, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 10, 0, 0), Text = "", PlaceholderText = "Enter Key...", TextSize = 14, TextColor3 = theme.Text, Font = theme.Font, ClearTextOnFocus = false })
@@ -722,13 +725,13 @@ function module:win(config)
 
 	local function makeTopbarBtn(symbol)
 		local btn = create("TextButton", { Parent = btns, Size = UDim2.new(0, 24, 0, 24), BackgroundTransparency = 1, Text = symbol, TextSize = 14, AutoButtonColor = false })
-		reg(btn, "TextColor3", "SubText")
+		reg(btn, "TextColor3", "SubTextColor")
 		reg(btn, "Font", "Font")
-		reg(btn, "BackgroundColor3", "ElementBg")
+		reg(btn, "BackgroundColor3", "ElementBackground")
 		create("UICorner", { Parent = btn, CornerRadius = UDim.new(0, 6) })
 
 		btn.MouseEnter:Connect(function()
-			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency, TextColor3 = theme.Accent }):Play()
+			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundHoverTransparency, TextColor3 = theme.Accent }):Play()
 		end)
 		btn.MouseLeave:Connect(function()
 			ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1, TextColor3 = theme.SubText }):Play()
@@ -783,7 +786,7 @@ function module:win(config)
 		end
 		local glow = btn:FindFirstChild("glow")
 		local indicator = btn:FindFirstChild("indicator")
-		ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play()
+		ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundHoverTransparency }):Play()
 		if indicator then ts:Create(indicator, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play() end
 		if glow then ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end
 		section.Visible = true
@@ -798,7 +801,7 @@ function module:win(config)
 		else
 			btn = create("TextButton", { Parent = tabBar, Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, AutoButtonColor = false, Text = "" })
 		end
-		reg(btn, "BackgroundColor3", "ElementBg")
+		reg(btn, "BackgroundColor3", "ElementBackground")
 		create("UICorner", { Parent = btn, CornerRadius = theme.ElementRadius })
 
 		local glow = create("UIStroke", { Name = "glow", Parent = btn, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
@@ -818,7 +821,7 @@ function module:win(config)
 		reg(label, "Font", "Font")
 
 		local tabIconLbl = create("ImageLabel", { Parent = btn, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.new(0, 18, 0, 18) })
-		reg(tabIconLbl, "ImageColor3", "SubText")
+		reg(tabIconLbl, "ImageColor3", "SubTextColor")
 
 		task.spawn(function()
 			while not Icons do task.wait(0.1) end
@@ -829,7 +832,7 @@ function module:win(config)
 			end
 		end)
 
-		btn.MouseEnter:Connect(function() if curBtn ~= btn then ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end end)
+		btn.MouseEnter:Connect(function() if curBtn ~= btn then ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundTransparency }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end end)
 		btn.MouseLeave:Connect(function() if curBtn ~= btn then ts:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play(); ts:Create(glow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end end)
 
 		local section = create("ScrollingFrame", { Name = title, Parent = sectionsHolder, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 3, Visible = false })
@@ -847,10 +850,10 @@ function module:win(config)
 			local holder = create("Frame", { Parent = section, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20) })
 
 			local iconLbl = create("ImageLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0.5, -8), Size = UDim2.new(0, 16, 0, 16), Visible = false })
-			reg(iconLbl, "ImageColor3", "SubText")
+			reg(iconLbl, "ImageColor3", "SubTextColor")
 
 			local textLbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true })
-			reg(textLbl, "TextColor3", "SubText")
+			reg(textLbl, "TextColor3", "SubTextColor")
 			reg(textLbl, "Font", "Font")
 
 			local function applyIcon(ic)
@@ -880,8 +883,8 @@ function module:win(config)
 					textLbl.TextColor3 = newColor
 					iconLbl.ImageColor3 = newColor
 				elseif not ignoreTheme then
-					reg(textLbl, "TextColor3", "SubText")
-					reg(iconLbl, "ImageColor3", "SubText")
+					reg(textLbl, "TextColor3", "SubTextColor")
+					reg(iconLbl, "ImageColor3", "SubTextColor")
 				end
 			end
 			function labelObj:Get()
@@ -897,8 +900,8 @@ function module:win(config)
 
 		function contents:button(text, cb)
 			text = checkText(text)
-			local btnEl = create("TextButton", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency, AutoButtonColor = false, Text = text, TextSize = 13 })
-			reg(btnEl, "BackgroundColor3", "ElementBg")
+			local btnEl = create("TextButton", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementBackgroundTransparency, AutoButtonColor = false, Text = text, TextSize = 13 })
+			reg(btnEl, "BackgroundColor3", "ElementBackground")
 			reg(btnEl, "TextColor3", "Text")
 			reg(btnEl, "Font", "Font")
 			create("UICorner", { Parent = btnEl, CornerRadius = theme.ElementRadius })
@@ -906,8 +909,8 @@ function module:win(config)
 			local glowE = create("UIStroke", { Parent = btnEl, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 			reg(glowE, "Color", "Accent")
 
-			btnEl.MouseEnter:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
-			btnEl.MouseLeave:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
+			btnEl.MouseEnter:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundHoverTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
+			btnEl.MouseLeave:Connect(function() ts:Create(btnEl, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundTransparency }):Play(); ts:Create(glowE, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
 			btnEl.MouseButton1Click:Connect(cb)
 
 			local btnObj = { Instance = btnEl }
@@ -930,45 +933,48 @@ function module:win(config)
 			local toggled = default and true or false
 			if savedData[id] ~= nil then toggled = savedData[id] end
 
-			local holder = create("TextButton", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency, AutoButtonColor = false, Text = "" })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("TextButton", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementBackgroundTransparency, AutoButtonColor = false, Text = "" })
+			reg(holder, "BackgroundColor3", "ToggleBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
 			local hoverGlow = create("UIStroke", { Parent = holder, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-			reg(hoverGlow, "Color", "Accent")
 
 			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(1, -60, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
-			reg(lbl, "TextColor3", "Text")
+			reg(lbl, "TextColor3", "TextColor")
 			reg(lbl, "Font", "Font")
 
 			local track = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.new(0, 38, 0, 20), BorderSizePixel = 0 })
 			create("UICorner", { Parent = track, CornerRadius = UDim.new(1, 0) })
 
 			local trackGlow = create("UIStroke", { Parent = track, Thickness = 1, Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-			reg(trackGlow, "Color", "Accent")
 
 			local knob = create("Frame", { Parent = track, Size = UDim2.new(0, 16, 0, 16), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
 			create("UICorner", { Parent = knob, CornerRadius = UDim.new(1, 0) })
 
 			local function applyVisual(animated)
-				local goalColor = toggled and theme.ToggleOn or theme.ToggleOff
-				local goalGlow = toggled and 0.15 or 0.85
-				local goalPos = toggled and UDim2.new(1, -18, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
-				if animated then
-					ts:Create(track, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundColor3 = goalColor }):Play()
-					ts:Create(trackGlow, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = goalGlow }):Play()
-					ts:Create(knob, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = goalPos }):Play()
-				else
-					track.BackgroundColor3 = goalColor
-					trackGlow.Transparency = goalGlow
-					knob.Position = goalPos
-				end
+				local goalColor  = toggled and theme.ToggleEnabled  or theme.ToggleDisabled
+				local goalStroke = toggled and theme.ToggleEnabledStroke or theme.ToggleDisabledStroke
+				local goalOuter  = toggled and theme.ToggleEnabledOuterStroke or theme.ToggleDisabledOuterStroke
+				local goalGlow   = toggled and 0.15 or 0.85
+				local goalPos    = toggled and UDim2.new(1, -18, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
 				knob.AnchorPoint = Vector2.new(0, 0.5)
+				if animated then
+					ts:Create(track,     TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundColor3 = goalColor }):Play()
+					ts:Create(trackGlow, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = goalGlow, Color = goalStroke }):Play()
+					ts:Create(hoverGlow, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Color = goalOuter }):Play()
+					ts:Create(knob,      TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = goalPos }):Play()
+				else
+					track.BackgroundColor3  = goalColor
+					trackGlow.Transparency  = goalGlow
+					trackGlow.Color         = goalStroke
+					hoverGlow.Color         = goalOuter
+					knob.Position           = goalPos
+				end
 			end
 			applyVisual(false)
 
-			holder.MouseEnter:Connect(function() ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementHoverTransparency }):Play(); ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
-			holder.MouseLeave:Connect(function() ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementTransparency }):Play(); ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
+			holder.MouseEnter:Connect(function() ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundHoverTransparency }):Play(); ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeHoverTransparency }):Play() end)
+			holder.MouseLeave:Connect(function() ts:Create(holder, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = theme.ElementBackgroundTransparency }):Play(); ts:Create(hoverGlow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Transparency = theme.StrokeTransparency }):Play() end)
 
 			holder.MouseButton1Click:Connect(function()
 				toggled = not toggled
@@ -1004,8 +1010,8 @@ function module:win(config)
 			local currentText = checkText(default)
 			if savedData[id] ~= nil then currentText = tostring(savedData[id]) end
 
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementBackgroundTransparency })
+			reg(holder, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
 			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.5, -12, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
@@ -1057,8 +1063,8 @@ function module:win(config)
 			local valStart = default
 			if savedData[id] ~= nil then valStart = tonumber(savedData[id]) or default end
 
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight + 16), BackgroundTransparency = theme.ElementTransparency })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight + 16), BackgroundTransparency = theme.ElementBackgroundTransparency })
+			reg(holder, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
 			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 6), Size = UDim2.new(1, -24, 0, 14), Text = text .. " : " .. tostring(valStart), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
@@ -1138,8 +1144,8 @@ function module:win(config)
 			local currentSelected = default or (list[1] or "...")
 			if savedData[id] ~= nil then currentSelected = savedData[id] end
 
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency, ClipsDescendants = true })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementBackgroundTransparency, ClipsDescendants = true })
+			reg(holder, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
 			local hoverGlow = create("UIStroke", { Parent = holder, Thickness = 1, Transparency = theme.StrokeTransparency, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
@@ -1151,11 +1157,11 @@ function module:win(config)
 			reg(lbl, "Font", "Font")
 
 			local selectedLbl = create("TextLabel", { Parent = trigger, BackgroundTransparency = 1, Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, -30, 1, 0), Text = tostring(currentSelected), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right })
-			reg(selectedLbl, "TextColor3", "SubText")
+			reg(selectedLbl, "TextColor3", "SubTextColor")
 			reg(selectedLbl, "Font", "Font")
 
 			local indicator = create("TextLabel", { Parent = trigger, BackgroundTransparency = 1, Position = UDim2.new(1, -24, 0, 0), Size = UDim2.new(0, 20, 1, 0), Text = "V", TextSize = 10, TextXAlignment = Enum.TextXAlignment.Center })
-			reg(indicator, "TextColor3", "SubText")
+			reg(indicator, "TextColor3", "SubTextColor")
 			reg(indicator, "Font", "FontBold")
 
 			local container = create("ScrollingFrame", { Parent = holder, Position = UDim2.new(0, 6, 0, theme.ElementHeight), Size = UDim2.new(1, -12, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y })
@@ -1221,8 +1227,8 @@ function module:win(config)
 
 			if savedData[id] ~= nil then currentKey = tostring(savedData[id]) end
 
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementBackgroundTransparency })
+			reg(holder, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
 			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.5, -12, 1, 0), Text = text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
@@ -1231,7 +1237,7 @@ function module:win(config)
 
 			local bindBtn = create("TextButton", { Parent = holder, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(0.35, 0, 0, 24), Text = currentKey, TextSize = 12, AutoButtonColor = false })
 			reg(bindBtn, "BackgroundColor3", "InputBackground")
-			reg(bindBtn, "TextColor3", "SubText")
+			reg(bindBtn, "TextColor3", "SubTextColor")
 			reg(bindBtn, "Font", "Font")
 			create("UICorner", { Parent = bindBtn, CornerRadius = UDim.new(0, 6) })
 
@@ -1256,13 +1262,13 @@ function module:win(config)
 						listening = false
 						currentKey = input.KeyCode.Name
 						bindBtn.Text = currentKey
-						reg(bindBtn, "TextColor3", "SubText")
+						reg(bindBtn, "TextColor3", "SubTextColor")
 						ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeTransparency }):Play()
 						if elementCanSave then savedData[id] = currentKey; saveConfig() end
 					elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
 						listening = false
 						bindBtn.Text = currentKey
-						reg(bindBtn, "TextColor3", "SubText")
+						reg(bindBtn, "TextColor3", "SubTextColor")
 						ts:Create(glow, TweenInfo.new(0.15), { Transparency = theme.StrokeTransparency }):Play()
 					end
 				else
@@ -1314,8 +1320,8 @@ function module:win(config)
 			local pTitle = checkText(config.Title or "")
 			local pContent = checkText(config.Content or "")
 
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = theme.ElementTransparency })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = theme.ElementBackgroundTransparency })
+			reg(holder, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 			create("UIPadding", { Parent = holder, PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) })
 			create("UIListLayout", { Parent = holder, Padding = UDim.new(0, 4) })
@@ -1325,7 +1331,7 @@ function module:win(config)
 			reg(titleLbl, "Font", "FontBold")
 
 			local contentLbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Text = pContent, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 2 })
-			reg(contentLbl, "TextColor3", "SubText")
+			reg(contentLbl, "TextColor3", "SubTextColor")
 			reg(contentLbl, "Font", "Font")
 
 			local paragraphObj = { Instance = holder }
@@ -1353,8 +1359,8 @@ function module:win(config)
 				pcall(function() currentColor = Color3.fromRGB(c[1] or 255, c[2] or 255, c[3] or 255) end)
 			end
 
-			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementTransparency, ClipsDescendants = true })
-			reg(holder, "BackgroundColor3", "ElementBg")
+			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, theme.ElementHeight), BackgroundTransparency = theme.ElementBackgroundTransparency, ClipsDescendants = true })
+			reg(holder, "BackgroundColor3", "ElementBackground")
 			create("UICorner", { Parent = holder, CornerRadius = theme.ElementRadius })
 
 			local lbl = create("TextLabel", { Parent = holder, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.6, -12, 0, theme.ElementHeight), Text = cName, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
@@ -1389,7 +1395,7 @@ function module:win(config)
 			for _, chDef in ipairs(channels) do
 				local row = create("Frame", { Parent = panel, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1 })
 				local chLbl = create("TextLabel", { Parent = row, BackgroundTransparency = 1, Size = UDim2.new(0, 16, 1, 0), Text = chDef.label, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left })
-				reg(chLbl, "TextColor3", "SubText")
+				reg(chLbl, "TextColor3", "SubTextColor")
 				reg(chLbl, "Font", "Font")
 
 				local track = create("Frame", { Parent = row, Position = UDim2.new(0, 20, 0.5, -3), Size = UDim2.new(1, -20, 0, 6), BorderSizePixel = 0 })
@@ -1465,7 +1471,7 @@ function module:win(config)
 		function contents:CreateDivider()
 			local holder = create("Frame", { Parent = section, Size = UDim2.new(1, 0, 0, 9), BackgroundTransparency = 1 })
 			local line = create("Frame", { Parent = holder, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 1), BorderSizePixel = 0, BackgroundTransparency = 0.85 })
-			reg(line, "BackgroundColor3", "SubText")
+			reg(line, "BackgroundColor3", "SubTextColor")
 
 			local dividerObj = { Instance = holder }
 			function dividerObj:Set(visible)
@@ -1500,11 +1506,11 @@ function module:win(config)
 	reg(loadTitleLbl, "Font", "FontBold")
 
 	local loadSubLbl = create("TextLabel", { Parent = loadingFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 195), Size = UDim2.new(1, 0, 0, 20), Text = loadingSubtitle, TextSize = 13 })
-	reg(loadSubLbl, "TextColor3", "SubText")
+	reg(loadSubLbl, "TextColor3", "SubTextColor")
 	reg(loadSubLbl, "Font", "Font")
 
 	local barBg = create("Frame", { Parent = loadingFrame, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 250), Size = UDim2.new(0.7, 0, 0, 4), BorderSizePixel = 0 })
-	reg(barBg, "BackgroundColor3", "ElementBg")
+	reg(barBg, "BackgroundColor3", "ElementBackground")
 	create("UICorner", { Parent = barBg, CornerRadius = UDim.new(1, 0) })
 
 	local barFill = create("Frame", { Parent = barBg, Size = UDim2.new(0, 0, 1, 0), BorderSizePixel = 0 })
