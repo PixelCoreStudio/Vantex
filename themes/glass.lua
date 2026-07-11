@@ -27,9 +27,9 @@ return {
 
 	-- Window — very transparent, slight cool white tint
 	Background = Color3.fromRGB(220, 225, 240),
-	BackgroundTransparency = 0.75,
+	BackgroundTransparency = 0.35,
 	Shadow = Color3.fromRGB(0, 0, 0),
-	ShadowTransparency = 0.90,
+	ShadowTransparency = 0.15,
 
 	-- Blur: the game world behind the entire screen is blurred by this amount.
 	-- 0 = no blur, 8 = subtle, 24 = strong frosted glass, 56 = max (Roblox cap).
@@ -37,7 +37,7 @@ return {
 
 	-- Topbar — slightly more opaque so it reads as a header
 	Topbar = Color3.fromRGB(200, 208, 230),
-	TopbarTransparency = 0.60,
+	TopbarTransparency = 0.35,
 
 	-- Notifications
 	NotificationBackground = Color3.fromRGB(220, 225, 240),
@@ -46,25 +46,25 @@ return {
 
 	-- Tabs
 	TabBackground = Color3.fromRGB(220, 225, 240),
-	TabBackgroundTransparency = 0.78,
+	TabBackgroundTransparency = 0.40,
 	TabBackgroundSelected = Color3.fromRGB(180, 160, 255),
 	TabBackgroundSelectedTransparency = 0.50,
 	TabStroke = Color3.fromRGB(255, 255, 255),
-	TabStrokeTransparency = 0.55,
+	TabStrokeTransparency = 0.45,
 	TabTextColor = Color3.fromRGB(200, 200, 220),
 	SelectedTabTextColor = Color3.fromRGB(255, 255, 255),
 
 	-- General elements
 	ElementBackground = Color3.fromRGB(220, 225, 240),
-	ElementBackgroundTransparency = 0.78,
+	ElementBackgroundTransparency = 0.35,
 	ElementBackgroundHover = Color3.fromRGB(200, 185, 255),
-	ElementBackgroundHoverTransparency = 0.62,
+	ElementBackgroundHoverTransparency = 0.45,
 	SecondaryElementBackground = Color3.fromRGB(220, 225, 240),
 	SecondaryElementBackgroundTransparency = 0.80,
 	ElementStroke = Color3.fromRGB(255, 255, 255),
 	ElementStrokeTransparency = 0.45,
 	SecondaryElementStroke = Color3.fromRGB(255, 255, 255),
-	SecondaryElementStrokeTransparency = 0.60,
+	SecondaryElementStrokeTransparency = 0.35,
 
 	-- Accent (soft violet works well with the frosted look)
 	Accent = Color3.fromRGB(180, 140, 255),
@@ -89,7 +89,7 @@ return {
 
 	-- Input
 	InputBackground = Color3.fromRGB(210, 215, 235),
-	InputBackgroundTransparency = 0.68,
+	InputBackgroundTransparency = 0.35,
 	InputStroke = Color3.fromRGB(255, 255, 255),
 
 	-- Strokes
