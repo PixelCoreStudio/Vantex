@@ -1,23 +1,11 @@
 --[[
-	VoidLib Theme: default
+	VoidLib Theme: light
 
-	This is the base theme VoidLib ships with. Use it as a template for your own
-	themes: copy this file, rename it (e.g. "dark.lua", "ocean.lua"), and change
-	whatever values you want. You don't have to include every field in a custom
-	theme - anything you leave out just keeps its default value.
+	A light/white-mode theme, meant to contrast with the dark "default" theme.
+	Same structure as themes/default.lua - only the colors changed. Drop this
+	file in your "themes" folder as "light.lua" and load it with:
 
-	HOW THEMES ARE LOADED:
-	1. Put this file (and any others you make) in a "themes" folder in your GitHub repo.
-	2. In VoidLib:win({...}), set:
-	     Theme = "default"                       -- matches this file's name (no ".lua")
-	     ThemesFolder = "https://raw.githubusercontent.com/YOUR-USER/YOUR-REPO/refs/heads/main/themes/"
-	3. To skip this system entirely and set colors yourself, either leave `Theme`
-	   unset or set `Theme = "Custom"`, and use `ThemeOverrides = { ... }` instead
-	   (see the VoidLib documentation, chapter 9).
-
-	Note: ThemeOverrides in VoidLib:win({...}) is always applied on top of whatever
-	theme you load here, so you can load a named theme AND still tweak a couple of
-	individual colors on top of it if you want.
+		VoidLib:win({ Theme = "light" })
 ]]
 
 return {
@@ -30,30 +18,30 @@ return {
 	ElementRadius = UDim.new(0, 8),
 
 	-- Core colors
-	Background = Color3.fromRGB(11, 11, 14),
-	Topbar = Color3.fromRGB(26, 26, 46),
-	TabBar = Color3.fromRGB(26, 26, 46),
-	ElementBg = Color3.fromRGB(26, 26, 46),
-	ElementHoverBg = Color3.fromRGB(42, 33, 64),
+	Background = Color3.fromRGB(245, 245, 248),
+	Topbar = Color3.fromRGB(255, 255, 255),
+	TabBar = Color3.fromRGB(255, 255, 255),
+	ElementBg = Color3.fromRGB(255, 255, 255),
+	ElementHoverBg = Color3.fromRGB(233, 230, 240),
 
 	-- Text colors
-	Text = Color3.fromRGB(255, 255, 255),
-	SubText = Color3.fromRGB(143, 143, 143),
+	Text = Color3.fromRGB(20, 20, 25),
+	SubText = Color3.fromRGB(100, 100, 110),
 
 	-- Accent / toggle colors
-	Accent = Color3.fromRGB(160, 32, 240),
-	ToggleOn = Color3.fromRGB(160, 32, 240),
-	ToggleOff = Color3.fromRGB(50, 50, 64),
+	Accent = Color3.fromRGB(124, 58, 237), -- violet, keeps the same "personality" as default but works on light bg
+	ToggleOn = Color3.fromRGB(124, 58, 237),
+	ToggleOff = Color3.fromRGB(210, 210, 218),
 
 	-- Transparencies (0 = fully opaque, 1 = fully invisible)
-	PanelTransparency = 0.30,
-	ElementTransparency = 0.35,
-	ElementHoverTransparency = 0.08,
-	StrokeTransparency = 1,
+	PanelTransparency = 0.05,
+	ElementTransparency = 0.0,
+	ElementHoverTransparency = 0.0,
+	StrokeTransparency = 0.85,
 	StrokeHoverTransparency = 0.35,
-	WindowStrokeTransparency = 0.45,
+	WindowStrokeTransparency = 0.75,
 
-	-- Blur (0 = disabled, use > 0 for glassmorphism — see glass.lua for an example)
+	-- Blur (0 = disabled)
 	Blur = 0,
 
 	-- Fallback window size/position (only used if you don't set WindowSize
