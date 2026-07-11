@@ -14,6 +14,7 @@ local module = {}
 local THEMES_FOLDER = "https://raw.githubusercontent.com/PixelCoreStudio/Vantex/refs/heads/main/themes/"
 
 local ts = cloneref(game:GetService("TweenService"))
+local lt = cloneref(game:GetService("Lighting"))
 local cg = cloneref(game:GetService("CoreGui"))
 local ui = cloneref(game:GetService("UserInputService"))
 local hs = cloneref(game:GetService("HttpService"))
@@ -99,6 +100,11 @@ module.Theme = {
 	StrokeTransparency = 1,
 	StrokeHoverTransparency = 0.35,
 	WindowStrokeTransparency = 0.45,
+
+	-- Blur (game background blur when the window is visible, 0 = disabled)
+	-- Uses Roblox's BlurEffect in Lighting - blurs the entire game world behind
+	-- the window, which is exactly how glassmorphism works.
+	Blur = 0,
 
 	-- Fallback window size/position (see WindowSize in VoidLib:win for the preferred way to set this per-window)
 	WindowSize = UDim2.new(0, 550, 0, 350),
@@ -712,10 +718,27 @@ function module:win(config)
 		end
 	end)
 
+	-- Blur effect: creates (or finds an existing) BlurEffect in Lighting and
+	-- tweens its Size between theme.Blur (window visible) and 0 (window hidden).
+	-- Only active when theme.Blur > 0 to avoid touching the game world otherwise.
+	local blurEffect = nil
+	if theme.Blur and theme.Blur > 0 then
+		blurEffect = lt:FindFirstChildOfClass("BlurEffect")
+		if not blurEffect then
+			blurEffect = Instance.new("BlurEffect")
+			blurEffect.Name = "VoidLibBlur"
+			blurEffect.Size = 0
+			blurEffect.Parent = lt
+		end
+	end
+
 	local function setUIVisibility(visible)
 		main.Visible = visible
 		windowShadow.Visible = visible
 		mobileBtn.Visible = isMobile and not visible
+		if blurEffect then
+			ts:Create(blurEffect, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = visible and theme.Blur or 0 }):Play()
+		end
 	end
 
 	mobileBtn.MouseButton1Click:Connect(function() setUIVisibility(true) end)
